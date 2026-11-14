@@ -1,0 +1,44 @@
+:root {
+  --bg: #000;
+  --panel: #0b0b0d;
+  --line: #1f2228;
+  --text: #e8eaee;
+  --muted: #8a8f99;
+  --dim: #5c616b;
+  --brim: #ff8a3d;
+  --teal: #2ec4b6;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); }
+.app { max-width: 1100px; margin: 0 auto; padding: 20px 20px 40px; display: flex; flex-direction: column; gap: 16px; }
+
+/* ---------- map panel ---------- */
+.map-panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.hud { display: flex; gap: 28px; align-items: center; padding: 12px 18px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.hud-item { display: flex; flex-direction: column; gap: 2px; }
+.hud-k { font-size: 10px; font-weight: 700; letter-spacing: 0.16em; color: var(--dim); }
+.hud-v { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.hud-mode { margin-left: auto; }
+.pill { background: transparent; color: var(--text); border: 1px solid #343842; border-radius: 999px; padding: 4px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+.pill.learn { border-color: var(--teal); color: var(--teal); }
+
+.map-wrap { position: relative; line-height: 0; }
+#map { display: block; cursor: crosshair; }
+.drag-box { position: absolute; border: 1.5px dashed #ffd166; background: rgba(255, 209, 102, 0.08); pointer-events: none; }
+
+.controls { display: flex; align-items: center; gap: 12px; padding: 10px 18px; border-top: 1px solid var(--line); flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.controls button { background: #15171b; color: var(--text); border: 1px solid #2c3038; border-radius: 8px; padding: 6px 12px; font: inherit; cursor: pointer; }
+.controls button:hover { border-color: #444a55; }
+.controls input[type='range'] { flex: 1; min-width: 160px; accent-color: var(--brim); }
+.controls label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.time { font-variant-numeric: tabular-nums; min-width: 52px; color: var(--text); }
+
+.coords { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; padding: 8px 18px 12px; font-size: 12px; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.coords .copied { color: #ffd166; }
+.coords .hint { margin-left: auto; font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: var(--dim); }
+.sandbox-note { margin: 0; font-size: 12px; color: var(--dim); }
+.sandbox-note a { color: var(--muted); }

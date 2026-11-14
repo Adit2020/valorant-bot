@@ -1,8 +1,10 @@
 import { z } from 'zod';
 
+// Bind A callouts, matching the regions drawn in web/src/map/bindA.ts (the map imports this type).
+// Teleporters are left out for now, so there is no 'tp'; players saying "tp" map to a_short via CALLOUT_ALIASES.
 export const RegionIdSchema = z.enum([
-  'a_lobby', 'a_short', 'a_link', 'showers', 'uhall', 'heaven',
-  'truck', 'triple', 'default', 'cubby', 'a_ct', 'tp',
+  'a_ct', 'heaven', 'vent', 'back_site', 'uhall', 'pillar', 'truck', 'triple',
+  'default', 'tower', 'showers', 'a_short', 'cubby', 'a_lobby', 'a_link',
 ]);
 export type RegionId = z.infer<typeof RegionIdSchema>;
 

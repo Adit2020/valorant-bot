@@ -71,10 +71,10 @@ Today's AI teammates take orders and chat (PUBG Ally is the public example). Non
 - **Learn mode:** game speed drops to 0.5× while push-to-talk is held.
 - **Match mode:** always 1×.
 
-**Bind A callouts:** A Lobby, A Short, A Link, Showers (A Bath), U-Hall (Lamps), Heaven (Tower), Truck, Triple, Default, Cubby, A CT, TP.
+**Bind A callouts:** A CT, Heaven (top-right, stairs down to back site), Vent (left, CT side), Back Site, U-Hall (narrow door down to Pillar on the attackers' side, open onto site), Pillar, Truck, Triple (L box in the bombsite), Default, Tower (by the Showers exit), Showers, A Lobby, A Short, Cubby, A Link. Teleporters are left out for now.
 
 **Brim's kit:**
-- 3 smokes. Typical targets: Heaven, U-Hall, CT, Truck–Triple gap.
+- 3 smokes. Typical targets: Heaven, U-Hall, Vent, Tower, Truck–Triple gap.
 - 1 molly.
 - Plant spots: Default, plus one alternate (team decides).
 
@@ -164,7 +164,7 @@ The site is one dark page. The **voice stage** sits at the top: Brim's voice sho
 | Build / dev | **Vite** |
 | Map + effects | **Canvas 2D**, our own fixed-tick loop (20 Hz sim, 60 fps render) |
 | HUD / subtitles / chat | Plain HTML/CSS (if using React, keep the game loop outside React state) |
-| Pathfinding / line of sight | Our own A* + line-of-sight code (port from `src/map.js`) |
+| Pathfinding / line of sight | Our own A* + line-of-sight code (done: `web/src/map/geometry.ts`) |
 | Speech-to-text | **Web Speech API** (Chrome, localhost or HTTPS). Upgrade to a hosted streaming STT only if it keeps mishearing. |
 | LLM | A small, fast model with tool calling, called from the server (e.g. Claude Haiku 5.5, or whatever we have credits for) |
 | TTS | A hosted TTS that streams audio. `speechSynthesis` as fallback. |
@@ -177,11 +177,13 @@ web/
   src/
     map/        bindA.ts (regions, labels, nav grid), render.ts, effects.ts
     sim/        loop.ts (fixed tick, timeScale), agents.ts (scripted), brim.ts (live agent), combat.ts
+                (testScene.ts: scripted stand-in round until Step 3)
     plays/      fastPlant.ts, fastRush.ts, slowPush.ts
     voice/      stt.ts (push-to-talk), tts.ts (queue, barge-in), audioLevels.ts (AnalyserNode: mic + TTS)
     comms/      keywordMatcher.ts, brimClient.ts, validator.ts, calloutGen.ts
     ui/         voiceStage.ts (layout + states), waveform.ts (animated line), subtitles.ts,
-                buyPhase.ts, hud.ts, results.ts
+                mapPanel.ts (map + HUD strip + loop), buyPhase.ts, results.ts
+    sandbox/    dev-only map sandbox at /sandbox.html (scrubber, designer view, coordinate tool)
     styles/     theme.css (black theme, type scale, state colors)
     trace/      log.ts (download JSON)
 server/
@@ -192,8 +194,8 @@ shared/
 
 ## Shared contracts (agree on these in Step 0 so people can work in parallel)
 ```ts
-type RegionId = 'a_lobby'|'a_short'|'a_link'|'showers'|'uhall'|'heaven'|'truck'|'triple'
-              |'default'|'cubby'|'a_ct'|'tp';
+type RegionId = 'a_ct'|'heaven'|'vent'|'back_site'|'uhall'|'pillar'|'truck'|'triple'|'default'
+              |'tower'|'showers'|'a_short'|'cubby'|'a_lobby'|'a_link';   // shared/schema.ts; web/src/map/types.ts re-exports it
 
 type Action =
   | { type: 'smoke' | 'molly'; target: RegionId }
@@ -255,17 +257,17 @@ Build the page design above with no map yet. Get it working *and* looking finish
 - A teammate who hasn't seen it calls it "polished" on first look.
 
 ### Step 2: Bind A map + effects renderer (MUST)
-- [ ] `bindA.ts`: region rectangles, callout labels, cover boxes (Truck, Triple), nav grid
-- [ ] Icons: 5 attackers (Brim highlighted), 5 defenders, each a circle with role letter, name tag and facing tick; X when dead
-- [ ] Effects:
+- [x] `bindA.ts`: region rectangles, callout labels, cover boxes (Truck, Triple), nav grid
+- [x] Icons: 5 attackers (Brim highlighted), 5 defenders, each a circle with role letter, name tag and facing tick; X when dead
+- [x] Effects:
   - Smoke: throw arc → bloom → ~15 s → fade
   - Molly: arc → flickering fire, ~7 s
   - Flash: white burst
   - Spike: plant progress ring, then a pulsing spike
   - Kill: X marker plus a kill-feed line
-- [ ] Toggles: callout labels on/off, designer view (shows everything)
-- [ ] **Mounted in the page below the voice stage** (replaces the placeholder), on the near-black `#0B0B0D` panel with the HUD strip (timer · smokes left · spike · mode)
-- [ ] The voice stage stays visible and usable above the map. On short screens, shrink the stage to ~35% of the viewport height instead of hiding it.
+- [x] Toggles: callout labels on/off, designer view (shows everything)
+- [x] **Mounted in the page below the voice stage** (replaces the placeholder), on the near-black `#0B0B0D` panel with the HUD strip (timer · smokes left · spike · mode)
+- [x] The voice stage stays visible and usable above the map. On short screens, shrink the stage to ~35% of the viewport height instead of hiding it.
 
 **Done when:** a test scene shows every icon and effect animating at 60 fps under the voice stage, and talking to Brim still animates the voice line while the map runs.
 
@@ -444,4 +446,7 @@ Real-Valorant transfer stretch (9a) → adaptation metric (9b) → the 3rd play 
 - `reference/devhacks-kickoff.pptx`: hackathon rules, Riot prompts, judging schedule.
 
 ## Already in the repo
-`src/map.js` (A*, line of sight, nav grid) and `src/plays.js` were scaffolded for **B site** before the switch to A. Port the A*/LOS helpers to `web/src/map/`; region data and plays need redoing for A.
+- `web/src/map/`: the Bind A map module (regions, cover, icons, effects, A*, line of sight), mounted under the voice stage by `web/src/ui/mapPanel.ts`. Step 2 is done.
+- `web/src/sim/testScene.ts`: scripted 20 s Fast-plant round that drives the map until Step 3's sim replaces it.
+- `web/sandbox.html`: dev-only map sandbox (scrubber, designer view, coordinate tool) at `/sandbox.html`.
+- `legacy/b-site-scaffold/`: the old B-site JS scaffold (superseded; `rng.js` is still useful for Step 3).

@@ -1,6 +1,6 @@
-# Talk to Brim — Step 1b
+# Talk to Brim — Steps 1–2
 
-Functional voice-check prototype on the Step 0 Vite + vanilla TypeScript / Express foundation. [PLAN.md](./PLAN.md) remains the source of truth and is unchanged by this implementation. The voice stage, waveform and subtitles are implemented. No map, simulation, game-action execution, keyword matcher, or scoring is implemented.
+Functional voice-check prototype on the Step 0 Vite + vanilla TypeScript / Express foundation. [PLAN.md](./PLAN.md) is the source of truth; [CLAUDE.md](./CLAUDE.md) is the one-page brief and [RESEARCH.md](./RESEARCH.md) the sourced numbers for the pitch. The voice stage, waveform and subtitles are implemented, and the Bind A map (Step 2) is mounted below them, driven by a scripted test round. No simulation, game-action execution, keyword matcher, or scoring is implemented.
 
 ## Run
 
@@ -13,13 +13,13 @@ cp .env.example server/.env
 npm run dev
 ```
 
-Open **http://127.0.0.1:5173** in Chrome. If that port is occupied, use `WEB_PORT=5174 npm run dev` and open 5174. Ctrl+C stops both servers. Express binds to loopback on 3001 by default. Vite forwards `/api` unchanged to Express, avoiding CORS configuration. Restart dev after changing environment settings so both processes read the same ports.
+Open **http://127.0.0.1:5173** in Chrome (map sandbox: **/sandbox.html**, dev only). If that port is occupied, use `WEB_PORT=5174 npm run dev` and open 5174. Ctrl+C stops both servers. Express binds to loopback on 3001 by default. Vite forwards `/api` unchanged to Express, avoiding CORS configuration. Restart dev after changing environment settings so both processes read the same ports.
 
 | Command | Purpose |
 | --- | --- |
 | `npm run dev` | Both servers, with watching |
 | `npm run typecheck` | Browser, server, shared contracts, configuration and tests |
-| `npm run test` | Contract, API, SDK transport, recognition, controls and lifecycle tests |
+| `npm run test` | Contract, API, SDK transport, recognition, controls, lifecycle, map data and test-round tests |
 | `npm run build` | Typecheck, Vite frontend and compiled Node backend |
 | `npm run start:server` | Run compiled backend after build |
 
@@ -56,9 +56,13 @@ web/src/
   voice/tts.ts                audio element, incremental MP3, browser speech fallback
   comms/brimClient.ts         validated API calls and source metadata
   trace/log.ts                conversation records, optional TurnLog and JSON export
-  styles/theme.css            reused black theme, basic usable controls
+  styles/theme.css            reused black theme, basic usable controls, map panel
   voice/*.test.ts             recognition, controls, speech fallback and lifecycle tests
-  map/, sim/, plays/, ui/     later work; documentation only
+  map/                        Step 2 Bind A map module: data, A*/LOS, renderer, effects (+ bindA.test.ts)
+  ui/mapPanel.ts              Step 2 integration: map + HUD strip under the voice stage
+  sim/testScene.ts            scripted stand-in round until Step 3 (+ testScene.test.ts)
+  sandbox/ (+ sandbox.html)   dev-only map sandbox: scrubber, designer view, coordinate tool
+  plays/                      later work; documentation only
 ```
 
 Voice/brain owner A owns voice/comms/server. B owns later map/UI, C simulation/agents, D plays/evidence. Contracts are shared team ownership; see PLAN.md for smaller-team splits. The old `src/map.js` and `src/plays.js` mentioned in PLAN.md are absent here. Neither has been invented or ported.
@@ -100,7 +104,7 @@ import { BrimResponseSchema, type BrimResponse } from '../shared/schema.js';
 // web/src/main.ts uses '../../shared/schema.js'; deeper modules add another ../.
 ```
 
-`RegionId`, `Action`, `BrimResponse`, `GameStateForLLM`, `TurnLog`, and `BrimEvent` retain the exact PLAN.md fields/enums/nullability. Additional endpoint schemas are `BrimRequestSchema`, `HealthResponseSchema`, and `TtsRequestSchema`. There is no dependency from shared into either app.
+`RegionId`, `Action`, `BrimResponse`, `GameStateForLLM`, `TurnLog`, and `BrimEvent` retain the exact PLAN.md fields/enums/nullability. `RegionId` is the 15 Bind A callouts drawn on the map (no `tp`; teleporters are out of scope). The map imports this type rather than redefining it, and `web/src/map/bindA.test.ts` fails if the drawn regions and the enum diverge. Additional endpoint schemas are `BrimRequestSchema`, `HealthResponseSchema`, and `TtsRequestSchema`. There is no dependency from shared into either app.
 
 ## Configuration
 
@@ -153,7 +157,7 @@ All gameplay work remains deferred.
 
 ## Step 1b voice stage
 
-The UI uses the existing conversation store and control bindings. `web/index.html` and `styles/theme.css` define the pure-black responsive stage, state indicator, preview-only Learn/Match selection, text fallback, collapsible history, trace export and near-black map placeholder. No image assets, UI frameworks or dependencies were added; the waveform and controls are code-native.
+The UI uses the existing conversation store and control bindings. `web/index.html` and `styles/theme.css` define the pure-black responsive stage, state indicator, Learn/Match selection, text fallback, collapsible history and trace export. (The near-black map placeholder was replaced by the Step 2 map panel below.) No image assets, UI frameworks or dependencies were added; the waveform and controls are code-native.
 
 `ui/waveform.ts` draws three phased sine waves with edge taper, smoothed levels/colors, high-DPI resizing and one independently owned animation loop. Idle is almost flat gray; listening is cyan with microphone RMS; thinking is a low amber traveling shimmer; speaking glows orange with playback RMS. Reduced motion freezes phase travel and lowers redraw frequency. Hidden documents skip drawing; disposal cancels the loop and resize observer.
 
@@ -164,3 +168,19 @@ The UI uses the existing conversation store and control bindings. `web/index.htm
 `ui/subtitles.ts` shows response text before playback, highlights only the active word, and fades about three seconds after speech ends. Browser word boundaries use actual character offsets. Hosted timing uses currentTime/duration when duration is finite; otherwise progression estimates 2.6 words/second. The backend supplies no timestamps, so none are claimed. Live user text is shown only during the hold and retained in history afterward. Audio failure leaves received text readable. Subtitle timers are cancelled for replacement/teardown; DOM updates happen only when content/highlight changes.
 
 Verification: `npm run typecheck`, `npm run test` (31 tests) and `npm run build` passed, including existing Step 1a cases plus RMS/taper/smoothing, estimated/boundary word selection, fade cancellation and late microphone cleanup. Browser testing at 1280×720 and 390×844 covered idle waveform, speaking synthesis envelope, word highlight, return to idle, subtitle fade, text input, interruption, mode selection and history expand/collapse; mobile had no horizontal overflow and console had no warnings/errors. Listening and thinking visuals are implemented but were not exercised end-to-end in the browser. Real microphone-reactive movement and hosted playback-reactive movement remain manual checks; no live provider credentials or hardware test was used. The Step 1 performance target is still unverified with live providers. PLAN.md is unchanged.
+
+
+## Step 2 Bind A map
+
+PLAN.md was replaced with the newer A-site version (Vent/Back Site/Pillar/Tower callouts, no TP, Step 2 ticked), so the PLAN.md SHA recorded in the Step 1 logs above refers to the earlier plan. `web/src/map/` is the Bind A module (regions, cover, icons, effects, A*, line of sight; see its README). `ui/mapPanel.ts` mounts it under the voice stage on the near-black panel with a HUD strip (round/spike timer · Brim's smokes · spike · mode) and a control row (pause, restart, callout labels, designer view). Until Step 3 exists, `sim/testScene.ts` plays a scripted 20-second Fast-plant round on loop; the panel labels it "Scripted test round".
+
+- **Own loop, sim time:** the panel runs its own `requestAnimationFrame` loop with a sim clock (frame delta clamped to 0.1 s), separate from the waveform loop and from conversation state. Effects receive sim time, never wall-clock. Drawing is skipped while the map is scrolled off-screen.
+- **Voice hooks:** Brim's icon gets the amber speaking pulse only while his real TTS plays (`conversation.state === 'speaking'`); the scripted round has no audio of its own. In Learn mode the round runs at 0.5× while push-to-talk is held (HUD shows `Learn · 0.5×`); Match mode stays 1×. The header Learn/Match buttons are now functional.
+- **Keys:** Space stays push-to-talk. P play/pause, R restart, L Learn/Match, D designer view; ignored in text fields and with modifier keys. Map controls drop focus after a mouse click so a focused button cannot swallow Space.
+- **Layout:** the global `canvas` rules in `theme.css` were scoped to `#waveform` so they no longer squash the map. On screens up to 1200 px tall (wider than 600 px) the stage compacts to ~35% of the viewport, with talk button and text box on one row, and the map sizes itself to fit underneath (minimum 560 px wide). Measured in headless Chrome: stage + map fit one viewport at 1512×860, 1440×900, 1920×1080, 1920×1200 and 2560×1440 windows; a 1280×800 window scrolls 60 px. No horizontal overflow at 390 px.
+- **Sandbox:** `/sandbox.html` (dev only; Vite builds only `index.html`) keeps the scrubber, designer view, nav-grid overlay and coordinate tool (click copies a point, shift+drag a rectangle for `bindA.ts`). URL params: `?t=9.5&pause=1&designer=1&labels=0&nav=1&mode=learn`.
+
+Verification (November 14, 2026, Node 20.20): `npm run typecheck`, `npm run test` (**40** tests) and `npm run build` passed (the build emits only `index.html`; the sandbox stays dev-only). A headless-Chrome run over the DevTools protocol confirmed the round advances, P/R/L/D work and are ignored while typing, a text call still gets a spoken subtitled reply with the map running, and there are no exceptions (only the expected `/api/tts` 503 without a key and a missing favicon). Not yet checked by hand: 60 fps on the demo laptop, real-microphone Learn-mode slow-down.
+
+**Known map-data issue:** the `heaven`, `back_site` and `truck` entries in `DEFENDER_SPOTS` have no line of sight to their own `watch` point (Triple/Truck cover blocks it; `hasLOS` has no height). Fix before Step 3 duels rely on them.
+

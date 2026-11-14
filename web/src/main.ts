@@ -8,6 +8,7 @@ import { downloadTrace } from './trace/log.js';
 import { MicrophoneLevels } from './voice/audioLevels.js';
 import { Waveform } from './ui/waveform.js';
 import { Subtitles } from './ui/subtitles.js';
+import { mountMapPanel, type Mode } from './ui/mapPanel.js';
 import './styles/theme.css';
 
 const element = <T extends HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
@@ -77,11 +78,19 @@ function render() {
     return row;
   }));
 }
-document.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach(button => {
-  button.addEventListener('click', () => {
-    document.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach(other => other.setAttribute('aria-pressed', String(other === button)));
-  });
+const modeButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-mode]')];
+let mode: Mode = 'learn';
+const mapPanel = mountMapPanel(element('.map-panel'), {
+  isTalking: () => conversation.isHolding,
+  isBrimSpeaking: () => conversation.state === 'speaking',
+  toggleMode: () => setMode(mode === 'learn' ? 'match' : 'learn'),
 });
+function setMode(next: Mode) {
+  mode = next;
+  modeButtons.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.mode === next)));
+  mapPanel.setMode(next);
+}
+modeButtons.forEach(button => button.addEventListener('click', () => setMode(button.dataset.mode === 'match' ? 'match' : 'learn')));
 const unbind = bindPushToTalk(talkButton, conversation);
 element<HTMLFormElement>('#text-form').addEventListener('submit', event => {
   event.preventDefault();
@@ -89,7 +98,7 @@ element<HTMLFormElement>('#text-form').addEventListener('submit', event => {
 });
 element('#stop').addEventListener('click', () => conversation.cancel());
 element('#export-trace').addEventListener('click', () => downloadTrace(conversation.records));
-window.addEventListener('pagehide', () => { unbind(); waveform.dispose(); subtitles.dispose(); mic.dispose(); speech.dispose(); }, { once: true });
+window.addEventListener('pagehide', () => { unbind(); mapPanel.dispose(); waveform.dispose(); subtitles.dispose(); mic.dispose(); speech.dispose(); }, { once: true });
 
 if (import.meta.env.DEV) {
   element('#mic-check').hidden = false;

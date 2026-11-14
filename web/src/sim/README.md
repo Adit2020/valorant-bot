@@ -1,1 +1,3 @@
-Steps 3, 4, 7 owner C: fixed-tick simulation, scripted agents, Brim goals, combat and perception. No runtime implementation in Step 0.
+Steps 3, 4, 7 owner C: fixed-tick simulation, scripted agents, Brim goals, combat and perception. Not implemented yet.
+
+Until then, `testScene.ts` is a scripted 20-second Fast-plant round (keyframed agents, utility, kills, plant) that feeds the map via `ui/mapPanel.ts` and the `/sandbox.html` dev page. Step 3 replaces it with the real 20 Hz loop, which must emit the same `MapState` + `MapEffect` objects so the map panel only swaps its source. `testScene.test.ts` checks the round stays on walkable floor with no overlapping agents. `testScene.ts` imports `map/bindA.js` and `map/types.js` directly (not `map/index.js`) to stay free of canvas code.

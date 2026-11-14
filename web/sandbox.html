@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bind A map sandbox</title>
+    <meta name="theme-color" content="#000000" />
+  </head>
+  <body>
+    <main class="app">
+      <p class="sandbox-note">Dev-only map sandbox (not in the production build). The real page is <a href="/">/</a>.</p>
+
+      <section class="map-panel" aria-label="Bind A map">
+        <div class="hud">
+          <div class="hud-item"><span class="hud-k" id="hudTimerK">ROUND</span><span class="hud-v" id="hudTimer">0:40</span></div>
+          <div class="hud-item"><span class="hud-k">BRIM SMOKES</span><span class="hud-v" id="hudSmokes">● ● ●</span></div>
+          <div class="hud-item"><span class="hud-k">SPIKE</span><span class="hud-v" id="hudSpike">Carried</span></div>
+          <div class="hud-item hud-mode">
+            <span class="hud-k">MODE</span>
+            <button id="modeBtn" class="pill" type="button" title="L">Match · 1×</button>
+          </div>
+        </div>
+
+        <div class="map-wrap" id="mapWrap">
+          <canvas id="map"></canvas>
+          <div id="dragBox" class="drag-box" hidden></div>
+        </div>
+
+        <div class="controls">
+          <button id="playBtn" type="button" title="P">Pause</button>
+          <button id="restartBtn" type="button" title="R">Restart</button>
+          <input id="scrub" type="range" min="0" max="20" step="0.05" value="0" aria-label="Timeline" />
+          <span id="timeLabel" class="time">0.0 s</span>
+          <label><input id="optLabels" type="checkbox" checked /> Labels</label>
+          <label><input id="optDesigner" type="checkbox" /> Designer view</label>
+          <label><input id="optNav" type="checkbox" /> Nav grid</label>
+        </div>
+
+        <div class="coords">
+          <span id="hover">Hover the map for coordinates</span>
+          <span id="copied" class="copied"></span>
+          <span class="hint">Click copies a point · Shift+drag copies a rectangle · P play/pause · R restart · L Learn/Match</span>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="/src/sandbox/main.ts"></script>
+  </body>
+</html>

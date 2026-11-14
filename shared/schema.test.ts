@@ -15,7 +15,7 @@ test('Action accepts every discriminant and every region target', () => {
 
 test('Action rejects missing targets, wrong sites, invalid plant spots and extra fields', () => {
   for (const action of [
-    { type: 'smoke' }, { type: 'molly', target: 'b_long' },
+    { type: 'smoke' }, { type: 'molly', target: 'b_long' }, { type: 'smoke', target: 'tp' },
     { type: 'move', target: 'alt' }, { type: 'hold', target: null },
     { type: 'plant', target: 'heaven' }, { type: 'plant' },
     { type: 'go', target: 'default' }, { type: 'shoot' }, {}, null,
