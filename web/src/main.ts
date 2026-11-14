@@ -44,6 +44,7 @@ const waveform = new Waveform(element<HTMLCanvasElement>('#waveform'), () => {
 function render() {
   const { state } = conversation;
   const holding = conversation.isHolding;
+  mapPanel.syncVoice();
   if (holding) mic.start(); else mic.stop();
   element('.voice-stage').dataset.state = state;
   waveform.setState(state);

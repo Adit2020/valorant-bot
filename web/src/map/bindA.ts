@@ -79,18 +79,18 @@ export const PLANT_SPOTS = {
 
 /** Where defenders usually stand, and the angle they hold. */
 export const DEFENDER_SPOTS = {
-  heaven: { pos: [655, 158] as Vec, watch: [565, 420] as Vec },
-  uhall: { pos: [340, 328] as Vec, watch: [315, 383] as Vec },
+  heaven: { pos: [635, 165] as Vec, watch: [565, 373] as Vec },
+  uhall: { pos: [340, 328] as Vec, watch: [310, 383] as Vec },
   vent: { pos: [360, 196] as Vec, watch: [450, 228] as Vec },
-  back_site: { pos: [565, 220] as Vec, watch: [478, 458] as Vec },
-  tower: { pos: [712, 383] as Vec, watch: [665, 483] as Vec },
+  back_site: { pos: [565, 220] as Vec, watch: [565, 373] as Vec },
+  tower: { pos: [704, 388] as Vec, watch: [665, 483] as Vec },
   triple: { pos: [602, 368] as Vec, watch: [478, 470] as Vec },
-  truck: { pos: [502, 306] as Vec, watch: [640, 483] as Vec },
+  truck: { pos: [470, 378] as Vec, watch: [480, 460] as Vec },
   cubby: { pos: [320, 573] as Vec, watch: [385, 533] as Vec },
 } as const;
 
 export const ATTACKER_STARTS = {
-  short: [[372, 656], [402, 670], [372, 680]] as Vec[],
+  short: [[372, 656], [402, 670], [366, 677]] as Vec[],
   showers: [[778, 668], [810, 676]] as Vec[],
 };
 

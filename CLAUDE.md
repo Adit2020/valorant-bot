@@ -47,8 +47,8 @@ TypeScript everywhere (strict + `noUncheckedIndexedAccess`; relative imports use
 | `server/`, `shared/schema.ts` | Express API (`/api/brim`, `/api/tts`, `/api/health`) and the shared Zod contracts |
 | `web/src/voice/`, `comms/`, `trace/`, `ui/waveform.ts`, `ui/subtitles.ts` | Steps 0–1 (teammate): push-to-talk, STT, TTS, conversation state, voice stage, trace export |
 | `web/src/map/` | Bind A map module. See its `README.md`. API: `createMapView(canvas)` → `render(state, t)`, `spawnEffect(e, t)`, `activeSmokes(t)`, `setOptions`, `clientToWorld` |
-| `web/src/ui/mapPanel.ts` | Step 2 integration: map + HUD strip under the voice stage, its own rAF loop and sim clock, P/R/L/D keys, Learn-mode 0.5× while talking |
-| `web/src/sim/testScene.ts` | Scripted 20 s Fast-plant round feeding the map. **Step 3 replaces it** with the real sim (same `MapState`/`MapEffect` output) |
+| `web/src/ui/mapPanel.ts` | Live map + HUD strip under the voice stage, fixed clock under rAF, P/R/L/D keys, Learn-mode 0.5× while talking |
+| `web/src/sim/testScene.ts` | Original 20 s visual demo, sandbox only. Main app uses `sim/round.ts` |
 | `web/sandbox.html`, `web/src/sandbox/` | Dev-only map sandbox at `/sandbox.html`: scrubber, designer view (D), coordinate tool (click / shift-drag copies coords). Not in the production build |
 | `PLAN.md`, `RESEARCH.md` | Plan and research |
 | `reference/` | Mentor talk + kickoff deck (pptx) |
@@ -78,10 +78,8 @@ TypeScript everywhere (strict + `noUncheckedIndexedAccess`; relative imports use
 - [x] Plan, research, mentor alignment
 - [x] Steps 0–1: repo, Express API, voice stage, push-to-talk, TTS, subtitles, trace (teammate). Live-provider latency and real-mic checks still manual (see `README.md`).
 - [x] Step 2: map module mounted below the voice stage with the HUD strip (timer · smokes · spike · mode). Stage shrinks to ~35vh on screens ≤ 1200 px tall so stage + map fit one viewport. Brim's icon pulses while his real TTS plays.
-- [ ] Step 3: game loop (fixed 20 Hz tick, `timeScale`, seeded RNG, scripted agents from play files, duels, fog of war). Replaces `web/src/sim/testScene.ts`; `mapPanel.ts` already applies Learn-mode 0.5× while push-to-talk is held.
+- [x] Step 3: live 20 Hz simulation, seeded fast plant, visibility, combat and Learn slowdown. See `web/src/sim/README.md` for the Step 4 handoff.
 - [ ] Steps 4–10: see `PLAN.md`. **Never cut** call scoring + the transfer test, or the Step 6 failure handling.
-
-**Known map-data issue:** 3 of 8 `DEFENDER_SPOTS` (heaven, back_site, truck) have no line of sight to their own `watch` point; Triple/Truck cover blocks it. Heaven can't see the Default plant spot either. Fix the spots (or decide high ground ignores cover) before Step 3 duels and Step 8 "smoked sightline" rules rely on them.
 
 ## Commands
 ```bash

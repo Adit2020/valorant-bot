@@ -21,7 +21,7 @@ import { createMapView } from '../map/index.js';
 const map = createMapView(canvas);                       // canvas fills its parent's width, 10:7
 map.render(state, simTime);                              // every frame
 map.spawnEffect({ type: 'smoke', from, to }, simTime);   // smoke | molly | flash | kill | ping
-map.activeSmokes(simTime);                               // smokes blocking sight, for hasLOS()
+map.activeSmokes(simTime);                               // visual smoke footprints (sandbox only)
 map.setOptions({ showLabels: true, designerView: false, showNav: false });
 ```
 - **Always pass sim time** (not wall-clock), so Learn mode slow-mo and replays apply to effects too.
@@ -29,7 +29,7 @@ map.setOptions({ showLabels: true, designerView: false, showNav: false });
 - The page mounts it in `ui/mapPanel.ts`; the dev sandbox at `/sandbox.html` (`src/sandbox/`) adds a scrubber and a coordinate tool.
 
 ## Reuse in later steps
-- **Step 3 (game loop):** `hasLOS(a, b, map.activeSmokes(t))` for who-sees-whom; `findPath()` for movement.
+- **Step 3 (game loop):** `hasLOS(a, b, round.activeSmokes())` for who-sees-whom; `findPath()` for movement.
 - **Step 4 (Brim agent):** `SMOKE_TARGETS`, `PLANT_SPOTS`, `DEFENDER_SPOTS`, `regionAt()` for "what can Brim see, where is it".
 - **Step 6 (keyword matcher):** `CALLOUT_ALIASES` maps what players say ("lamps", "tower", "bath", "tp") to region ids. Match longest phrases first.
 
@@ -39,4 +39,4 @@ The layout is a simplified schematic, not a trace of Riot's minimap. To adjust i
 2. Paste it into the region's `rects` in `bindA.ts`.
 3. Run `npm test` and check the sightlines in designer view (D).
 
-**Known issue:** the `heaven`, `back_site` and `truck` entries in `DEFENDER_SPOTS` can't see their own `watch` point (Triple/Truck cover is in the way; `hasLOS` has no height, so Heaven doesn't see over cover). Fix before Step 3 duels depend on them.
+The defender watch points are tested against 2D cover. Heaven sees Default down the west side of Triple; it cannot see over the box.

@@ -136,16 +136,32 @@ export function segmentHitsCircle(a: Vec, b: Vec, c: Circle): boolean {
   return px * px + py * py <= c.r * c.r;
 }
 
-/** True if nothing (walls, cover, smokes) blocks the straight line from a to b. */
-export function hasLOS(a: Vec, b: Vec, smokes: Circle[] = []): boolean {
-  const dx = b[0] - a[0];
-  const dy = b[1] - a[1];
-  const steps = Math.max(1, Math.ceil(Math.hypot(dx, dy) / 4));
-  for (let s = 1; s < steps; s++) {
-    const t = s / steps;
-    if (!isOpen(a[0] + dx * t, a[1] + dy * t)) return false;
+// Visit every crossed cell, including both neighbours at an exact corner. Sampling every
+// few pixels misses short crossings near corners; the same predicate now protects A* and motion.
+function clearSegment(a: Vec, b: Vec, cell: number, open: (i: number, j: number) => boolean): boolean {
+  let i = Math.floor(a[0] / cell), j = Math.floor(a[1] / cell);
+  const endI = Math.floor(b[0] / cell), endJ = Math.floor(b[1] / cell);
+  if (!open(i, j) || !open(endI, endJ)) return false;
+  const dx = b[0] - a[0], dy = b[1] - a[1];
+  const sx = Math.sign(dx), sy = Math.sign(dy);
+  const stepX = dx ? cell / Math.abs(dx) : Infinity;
+  const stepY = dy ? cell / Math.abs(dy) : Infinity;
+  let tx = dx ? ((i + Number(sx > 0)) * cell - a[0]) / dx : Infinity;
+  let ty = dy ? ((j + Number(sy > 0)) * cell - a[1]) / dy : Infinity;
+  while (i !== endI || j !== endJ) {
+    const x = i === endI ? Infinity : tx, y = j === endJ ? Infinity : ty;
+    if (Math.abs(x - y) < 1e-10 && (!open(i + sx, j) || !open(i, j + sy))) return false;
+    if (x <= y) { i += sx; tx += stepX; }
+    if (y <= x) { j += sy; ty += stepY; }
+    if (!open(i, j)) return false;
   }
-  return !smokes.some((sm) => segmentHitsCircle(a, b, sm));
+  return true;
+}
+
+const fineOpen = (i: number, j: number) => i >= 0 && j >= 0 && i < fineCols && j < fineRows && openFine[j * fineCols + i] === 1;
+
+export function hasLOS(a: Vec, b: Vec, smokes: Circle[] = []): boolean {
+  return clearSegment(a, b, FINE, fineOpen) && !smokes.some(sm => segmentHitsCircle(a, b, sm));
 }
 
 /** Distance a ray travels before hitting a wall, cover, or smoke (for fog-of-war polygons). */
@@ -167,13 +183,7 @@ export function castRay(from: Vec, angle: number, maxDist: number, smokes: Circl
 
 /** Is a straight segment walkable on the nav grid? */
 export function navLine(a: Vec, b: Vec): boolean {
-  const steps = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 5));
-  for (let s = 0; s <= steps; s++) {
-    const t = s / steps;
-    const [i, j] = toCell(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t);
-    if (!navOpen(i, j)) return false;
-  }
-  return true;
+  return clearSegment(a, b, COARSE, navOpen);
 }
 
 // ---------- A* ----------
@@ -182,8 +192,9 @@ export function navLine(a: Vec, b: Vec): boolean {
  * `extraCost(i, j)` lets callers avoid cells (e.g. return 40 for cells inside a molly).
  */
 export function findPath(from: Vec, to: Vec, extraCost?: (i: number, j: number) => number): Vec[] {
-  const [si, sj] = nearestNavCell(from[0], from[1]);
-  const [ti, tj] = nearestNavCell(to[0], to[1]);
+  const [si, sj] = toCell(...from);
+  const [ti, tj] = toCell(...to);
+  if (!navLine(from, from) || !navLine(to, to)) return [];
   const N = NAV.cols * NAV.rows;
   const g = new Float32Array(N).fill(Infinity);
   const came = new Int32Array(N).fill(-1);
@@ -254,13 +265,12 @@ export function findPath(from: Vec, to: Vec, extraCost?: (i: number, j: number) 
         }
       }
   }
-  if (came[goal] === -1 && goal !== start) return [to];
+  if (came[goal] === -1 && goal !== start) return [];
   const cells: number[] = [];
   for (let c = goal; c !== -1; c = came[c]!) cells.push(c);
   cells.reverse();
   const pts = cells.map((c) => cellCenter(c % NAV.cols, Math.floor(c / NAV.cols)));
-  const [fi, fj] = toCell(to[0], to[1]);
-  if (navOpen(fi, fj)) pts[pts.length - 1] = to;
+  pts.push([...to]); // Keep the final cell center available if the exact endpoint needs one more turn.
   // string pulling
   const out: Vec[] = [];
   let i = 0;
@@ -269,6 +279,7 @@ export function findPath(from: Vec, to: Vec, extraCost?: (i: number, j: number) 
     let j = pts.length - 1;
     while (j > i && !navLine(cursor, pts[j]!)) j--;
     const next = pts[j]!;
+    if (!navLine(cursor, next)) return [];
     out.push(next);
     cursor = next;
     i = j + 1;

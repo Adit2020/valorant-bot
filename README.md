@@ -1,6 +1,6 @@
 # Talk to Brim — Steps 1–2
 
-Functional voice-check prototype on the Step 0 Vite + vanilla TypeScript / Express foundation. [PLAN.md](./PLAN.md) is the source of truth; [CLAUDE.md](./CLAUDE.md) is the one-page brief and [RESEARCH.md](./RESEARCH.md) the sourced numbers for the pitch. The voice stage, waveform and subtitles are implemented, and the Bind A map (Step 2) is mounted below them, driven by a scripted test round. No simulation, game-action execution, keyword matcher, or scoring is implemented.
+Talk to Brim pairs a voice teammate with a deterministic, 20 Hz Bind A simulation. The main page runs one scripted attack; voice replies remain conversational. See the [simulation guide](web/src/sim/README.md) for replay, combat rules and the Step 4 interfaces, or [PLAN.md](PLAN.md) for the project plan.
 
 ## Run
 
@@ -60,9 +60,9 @@ web/src/
   voice/*.test.ts             recognition, controls, speech fallback and lifecycle tests
   map/                        Step 2 Bind A map module: data, A*/LOS, renderer, effects (+ bindA.test.ts)
   ui/mapPanel.ts              Step 2 integration: map + HUD strip under the voice stage
-  sim/testScene.ts            scripted stand-in round until Step 3 (+ testScene.test.ts)
+  sim/testScene.ts            original scripted sandbox round (+ testScene.test.ts)
   sandbox/ (+ sandbox.html)   dev-only map sandbox: scrubber, designer view, coordinate tool
-  plays/                      later work; documentation only
+  plays/                      fastPlant.ts: one attack split between Short and Showers
 ```
 
 Voice/brain owner A owns voice/comms/server. B owns later map/UI, C simulation/agents, D plays/evidence. Contracts are shared team ownership; see PLAN.md for smaller-team splits. The old `src/map.js` and `src/plays.js` mentioned in PLAN.md are absent here. Neither has been invented or ported.
@@ -172,7 +172,7 @@ Verification: `npm run typecheck`, `npm run test` (31 tests) and `npm run build`
 
 ## Step 2 Bind A map
 
-PLAN.md was replaced with the newer A-site version (Vent/Back Site/Pillar/Tower callouts, no TP, Step 2 ticked), so the PLAN.md SHA recorded in the Step 1 logs above refers to the earlier plan. `web/src/map/` is the Bind A module (regions, cover, icons, effects, A*, line of sight; see its README). `ui/mapPanel.ts` mounts it under the voice stage on the near-black panel with a HUD strip (round/spike timer · Brim's smokes · spike · mode) and a control row (pause, restart, callout labels, designer view). Until Step 3 exists, `sim/testScene.ts` plays a scripted 20-second Fast-plant round on loop; the panel labels it "Scripted test round".
+PLAN.md was replaced with the newer A-site version (Vent/Back Site/Pillar/Tower callouts, no TP, Step 2 ticked), so the PLAN.md SHA recorded in the Step 1 logs above refers to the earlier plan. `web/src/map/` is the Bind A module (regions, cover, icons, effects, A*, line of sight; see its README). `ui/mapPanel.ts` mounts it under the voice stage on the near-black panel with a HUD strip (round/spike timer · Brim's smokes · spike · mode) and a control row (pause, restart, callout labels, designer view). In the original Step 2 build, `sim/testScene.ts` plays a scripted 20-second Fast-plant round on loop; the panel labels it "Scripted test round".
 
 - **Own loop, sim time:** the panel runs its own `requestAnimationFrame` loop with a sim clock (frame delta clamped to 0.1 s), separate from the waveform loop and from conversation state. Effects receive sim time, never wall-clock. Drawing is skipped while the map is scrolled off-screen.
 - **Voice hooks:** Brim's icon gets the amber speaking pulse only while his real TTS plays (`conversation.state === 'speaking'`); the scripted round has no audio of its own. In Learn mode the round runs at 0.5× while push-to-talk is held (HUD shows `Learn · 0.5×`); Match mode stays 1×. The header Learn/Match buttons are now functional.
@@ -182,5 +182,6 @@ PLAN.md was replaced with the newer A-site version (Vent/Back Site/Pillar/Tower 
 
 Verification (November 14, 2026, Node 20.20): `npm run typecheck`, `npm run test` (**40** tests) and `npm run build` passed (the build emits only `index.html`; the sandbox stays dev-only). A headless-Chrome run over the DevTools protocol confirmed the round advances, P/R/L/D work and are ignored while typing, a text call still gets a spoken subtitled reply with the map running, and there are no exceptions (only the expected `/api/tts` 503 without a key and a missing favicon). Not yet checked by hand: 60 fps on the demo laptop, real-microphone Learn-mode slow-down.
 
-**Known map-data issue:** the `heaven`, `back_site` and `truck` entries in `DEFENDER_SPOTS` have no line of sight to their own `watch` point (Triple/Truck cover blocks it; `hasLOS` has no height). Fix before Step 3 duels rely on them.
+## Step 3: replay a live round
 
+Open the main page with `?seed=2026`; **R** replays that same seed. Omen's hold varies with the seed. The main page shows live allies and only the defenders Raze or Brim can currently see; **D** toggles the full scene. The 40-second scenario stops at its time limit. The spike stays with Sova or drops where he dies. The sandbox keeps the original Step 2 visual demo.

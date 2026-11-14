@@ -39,7 +39,7 @@ test('A* reaches both plant spots from every attacker start along walkable segme
     for (const [name, spot] of Object.entries(PLANT_SPOTS)) {
       const path = findPath(start, spot);
       assert.deepEqual(path.at(-1), spot, `${start} → ${name}`);
-      // The first leg starts off-grid (spawn points sit near walls); every later leg must be on the nav grid.
+      assert.ok(navLine(start, path[0]!), `spawn → first waypoint: ${start}`);
       for (let i = 1; i < path.length; i++) assert.ok(navLine(path[i - 1]!, path[i]!), `${start} → ${name}, leg ${i}`);
     }
   }
@@ -50,4 +50,20 @@ test('a smoke between two agents blocks line of sight', () => {
   assert.ok(hasLOS(pos, watch));
   const mid: Vec = [(pos[0] + watch[0]) / 2, (pos[1] + watch[1]) / 2];
   assert.equal(hasLOS(pos, watch, [{ x: mid[0], y: mid[1], r: 20 }]), false);
+});
+
+test('unreachable or blocked destinations never produce a direct fallback', () => {
+  const start = ATTACKER_STARTS.short[0]!;
+  assert.deepEqual(findPath(start, [500, 335]), []); // inside Truck
+  assert.deepEqual(findPath([0, 0], PLANT_SPOTS.default), []);
+  // Valid endpoints in separate components when every intervening edge is impassable.
+  assert.deepEqual(findPath(start, PLANT_SPOTS.default, () => Infinity), []);
+});
+
+test('every defender has a reachable hold and a clear intended approach', () => {
+  for (const [name, { pos, watch }] of Object.entries(DEFENDER_SPOTS)) {
+    assert.deepEqual(findPath(ATTACKER_STARTS.short[0]!, pos).at(-1), pos, name);
+    assert.ok(hasLOS(pos, watch), name);
+  }
+  assert.ok(hasLOS(DEFENDER_SPOTS.heaven.pos, PLANT_SPOTS.default));
 });

@@ -36,7 +36,7 @@ export interface MapView {
   render(state: MapState, simTime: number): void;
   spawnEffect(effect: MapEffect, simTime: number): void;
   clearEffects(): void;
-  /** Smokes currently blocking sight; pass to hasLOS()/castRay() in the sim. */
+  /** Visual smoke footprints for sandbox previews. Gameplay uses Round.activeSmokes(). */
   activeSmokes(simTime: number): Circle[];
   setOptions(patch: Partial<MapOptions>): void;
   getOptions(): MapOptions;

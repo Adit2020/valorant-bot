@@ -1,11 +1,9 @@
-// Step 2 integration: the Bind A map panel under the voice stage.
-// Owns its own animation loop and sim clock, outside any UI state. Until Step 3 lands, the round is the
-// scripted test scene; Step 3 swaps `scene` for the real 20 Hz sim, which emits the same MapState/MapEffect.
 import { createMapView } from '../map/index.js';
-import { createTestScene } from '../sim/testScene.js';
+import { Round, ROUND_TICKS, type RoundEvent } from '../sim/round.js';
+import { DT, FixedClock, timeScale, type Mode } from '../sim/loop.js';
 import { isTypingTarget } from '../voice/controls.js';
 
-export type Mode = 'learn' | 'match';
+export type { Mode } from '../sim/loop.js';
 
 export interface MapPanelHooks {
   /** True while push-to-talk is held. Learn mode runs the round at 0.5× during that time. */
@@ -18,13 +16,9 @@ export interface MapPanelHooks {
 
 export interface MapPanel {
   setMode(mode: Mode): void;
+  syncVoice(): void;
   dispose(): void;
 }
-
-const ROUND_SECONDS = 40;
-const SPIKE_SECONDS = 45;
-const LOOP_PAUSE_SECONDS = 2.5;
-const LEARN_TIME_SCALE = 0.5;
 
 const clock = (seconds: number) => {
   const s = Math.max(0, Math.ceil(seconds));
@@ -46,17 +40,18 @@ export function mountMapPanel(root: HTMLElement, hooks: MapPanelHooks): MapPanel
     spike: $('#hud-spike'), mode: $('#hud-mode'),
   };
 
-  const scene = createTestScene();
+  const param = new URLSearchParams(location.search).get('seed');
+  const round = new Round(param && /^\d{1,10}$/.test(param) ? Number(param) : 2026);
+  $('.hud-tag').textContent = 'Fast plant · Seed ' + round.seed;
+  const fixed = new FixedClock();
   const map = createMapView(canvas, { showLabels: labels.checked, designerView: designer.checked });
+  const effects: RoundEvent[] = []; // bounded by one 40-second round; replay on view changes only
   const listeners = new AbortController();
   const on = { signal: listeners.signal };
 
-  // Sim time, never wall-clock: Learn-mode slow-mo and effect timings both follow it.
-  let simTime = 0;
-  let lastSimTime = 0;
-  let endedFor = 0;
   let playing = true;
   let mode: Mode = 'learn';
+  let scale = timeScale(mode, hooks.isTalking());
   let lastFrame = performance.now();
   let frame = 0;
   let visible = true;
@@ -69,30 +64,36 @@ export function mountMapPanel(root: HTMLElement, hooks: MapPanelHooks): MapPanel
   };
 
   function setPlaying(next: boolean) {
+    lastFrame = performance.now();
     playing = next;
     playButton.textContent = playing ? 'Pause' : 'Play';
     playButton.setAttribute('aria-pressed', String(!playing));
   }
   function restart() {
+    effects.length = 0;
     map.clearEffects();
-    simTime = 0;
-    lastSimTime = 0;
-    endedFor = 0;
+    round.reset();
+    fixed.reset();
     setPlaying(true);
   }
   function togglePlay() {
-    if (!playing && simTime >= scene.duration) restart();
-    else setPlaying(!playing);
+    if (round.finished) restart();
+    else { advance(performance.now()); setPlaying(!playing); }
   }
   function toggleDesigner() {
     designer.checked = !designer.checked;
+    applyDesigner();
+  }
+  function applyDesigner() {
+    map.clearEffects();
+    for (const e of effects) if (e.public || designer.checked) map.spawnEffect(e.effect, e.tick * DT);
     map.setOptions({ designerView: designer.checked });
   }
 
   playButton.addEventListener('click', togglePlay, on);
   $('#map-restart').addEventListener('click', restart, on);
   labels.addEventListener('change', () => map.setOptions({ showLabels: labels.checked }), on);
-  designer.addEventListener('change', () => map.setOptions({ designerView: designer.checked }), on);
+  designer.addEventListener('change', applyDesigner, on);
   // Space stays push-to-talk; P/R/L/D are the map keys. Checkboxes still get shortcuts, text fields don't.
   window.addEventListener('keydown', event => {
     if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
@@ -122,49 +123,49 @@ export function mountMapPanel(root: HTMLElement, hooks: MapPanelHooks): MapPanel
     : new IntersectionObserver(entries => { visible = entries.some(entry => entry.isIntersecting); });
   observer?.observe(canvas);
 
-  function updateHud(t: number, timeScale: number) {
-    const plantedAt = scene.plantStart + scene.plantDuration;
-    if (t < plantedAt) {
-      set(hud.timerKey, 'Round');
-      set(hud.timer, clock(ROUND_SECONDS - t));
-    } else {
-      set(hud.timerKey, 'Spike');
-      set(hud.timer, clock(SPIKE_SECONDS - (t - plantedAt)));
-    }
-    const left = Math.max(0, scene.brimSmokesLeft(t));
-    set(hud.smokes, '●'.repeat(left) + '○'.repeat(Math.max(0, 3 - left)));
-    hud.smokes.setAttribute('aria-label', `${left} of 3 smokes left`);
-    set(hud.spike, t < scene.plantStart ? 'Carried'
-      : t < plantedAt ? `Planting ${Math.round(((t - scene.plantStart) / scene.plantDuration) * 100)}%`
-        : 'Planted · Default');
-    set(hud.mode, mode === 'learn' ? `Learn · ${timeScale}×` : 'Match · 1×');
-    hud.mode.dataset.slow = String(timeScale < 1);
+  function advance(now: number) {
+    const elapsed = now - lastFrame;
+    lastFrame = now;
+    if (!playing || document.hidden) return;
+    fixed.advance(elapsed, scale, () => {
+      for (const event of round.step()) {
+        effects.push(event);
+        if (event.public || designer.checked) map.spawnEffect(event.effect, event.tick * DT);
+      }
+    });
+    if (round.finished) setPlaying(false);
   }
 
-  function tick(now: number) {
+  // Settle the old rate up to the input timestamp, even between two animation frames.
+  function syncRate() {
+    advance(performance.now());
+    scale = timeScale(mode, hooks.isTalking());
+  }
+  document.addEventListener('visibilitychange', () => { lastFrame = performance.now(); }, on);
+
+  function tick() {
     frame = requestAnimationFrame(tick);
-    const dt = Math.min(0.1, (now - lastFrame) / 1000);
-    lastFrame = now;
-    const timeScale = mode === 'learn' && hooks.isTalking() ? LEARN_TIME_SCALE : 1;
-    if (playing) {
-      if (simTime < scene.duration) simTime = Math.min(scene.duration, simTime + dt * timeScale);
-      else if ((endedFor += dt) >= LOOP_PAUSE_SECONDS) restart();
-    }
-    for (const event of scene.events) if (event.t > lastSimTime && event.t <= simTime) map.spawnEffect(event.effect, event.t);
-    lastSimTime = simTime;
-    updateHud(simTime, timeScale);
+    advance(performance.now());
+    const state = round.snapshot(designer.checked, round.finished ? 1 : fixed.alpha);
+    set(hud.timerKey, round.finished ? 'Finished' : 'Round');
+    set(hud.timer, clock(ROUND_TICKS * DT - round.time));
+    const left = round.smokesLeft;
+    set(hud.smokes, '●'.repeat(left) + '○'.repeat(3 - left));
+    hud.smokes.setAttribute('aria-label', `${left} of 3 smokes left`);
+    set(hud.spike, state.spike.state === 'carried' ? 'Carried' : 'Dropped');
+    set(hud.mode, mode === 'learn' ? `Learn · ${scale}×` : 'Match · 1×');
+    hud.mode.dataset.slow = String(scale < 1);
     if (!visible) return;
-    const speaking = hooks.isBrimSpeaking();
-    const state = scene.stateAt(simTime);
-    // The scripted round has no audio of its own, so Brim pulses only while his real voice plays.
-    state.agents = state.agents.map(agent => (agent.isBrim ? { ...agent, speaking } : { ...agent, speaking: false }));
-    map.render(state, simTime);
+    const brim = state.agents.find(a => a.isBrim);
+    if (brim) brim.speaking = hooks.isBrimSpeaking();
+    map.render(state, round.time + (round.finished ? 0 : fixed.alpha * DT));
   }
   setPlaying(true);
   frame = requestAnimationFrame(tick);
 
   return {
-    setMode(next) { mode = next; },
+    setMode(next) { mode = next; syncRate(); },
+    syncVoice: syncRate,
     dispose() {
       cancelAnimationFrame(frame);
       listeners.abort();
