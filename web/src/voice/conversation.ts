@@ -1,0 +1,170 @@
+import type { BrimResponse } from '../../../shared/schema.js';
+import { BrimRequestSchema } from '../../../shared/schema.js';
+import type { ReplyResult } from '../comms/brimClient.js';
+import { attachTurnLog, type ConversationRecord, type ConversationState } from '../trace/log.js';
+import type { Capture, SpeechResult } from './stt.js';
+
+export interface ConversationDependencies {
+  capture(interim: (text: string) => void): Capture;
+  reply(transcript: string, signal: AbortSignal): Promise<ReplyResult>;
+  speak(text: string, signal: AbortSignal, started: (mode: NonNullable<ConversationRecord['audio']>) => void, notice: (message: string) => void): Promise<void>;
+  stopAudio(): void;
+  unlockAudio(): void;
+  now(): number;
+  update(): void;
+}
+
+export class Conversation {
+  state: ConversationState = 'idle';
+  transcript = '';
+  response: BrimResponse | null = null;
+  message = 'Hold Space to talk, or type a message.';
+  records: ConversationRecord[] = [];
+  private generation = 0;
+  private current?: ConversationRecord;
+  private abort?: AbortController;
+  private capture?: Capture;
+  private releasedAt?: number;
+  private recognitionResult?: SpeechResult;
+  private readonly origin: number;
+
+  constructor(private deps: ConversationDependencies) { this.origin = deps.now(); }
+
+  get isHolding(): boolean { return this.state === 'listening' && this.releasedAt === undefined; }
+
+  private changed() { this.deps.update(); }
+  private newRecord(input: 'voice' | 'text') {
+    const record: ConversationRecord = {
+      id: this.generation, t: (this.deps.now() - this.origin) / 1000, input,
+      transcript: '', source: null, audio: null, status: 'pending', notices: [],
+      latencyMs: { stt: null, think: null, firstAudio: null },
+    };
+    this.current = record;
+    this.records.push(record);
+    this.transcript = '';
+    this.response = null;
+    return record;
+  }
+
+  cancel(message = 'Interrupted. Ready for your next call.') {
+    ++this.generation;
+    this.abort?.abort();
+    this.capture?.cancel();
+    this.capture = undefined;
+    this.recognitionResult = undefined;
+    this.releasedAt = undefined;
+    this.deps.stopAudio();
+    if (this.current?.status === 'pending') this.current.status = 'interrupted';
+    this.current = undefined;
+    this.state = 'idle';
+    this.message = message;
+    this.changed();
+  }
+
+  beginListening() {
+    if (this.state === 'listening' && this.releasedAt === undefined) return;
+    this.cancel(); // Stops speech synchronously, before requesting microphone access.
+    this.deps.unlockAudio();
+    const id = this.generation;
+    const record = this.newRecord('voice');
+    this.state = 'listening';
+    this.message = 'Listening… release to send.';
+    this.changed();
+    try {
+      this.capture = this.deps.capture(text => {
+        if (id !== this.generation) return;
+        this.transcript = record.transcript = text;
+        this.changed();
+      });
+      void this.capture.done.then(result => {
+        if (id !== this.generation) return;
+        this.recognitionResult = result;
+        if (this.releasedAt !== undefined) this.finishRecognition(id, record);
+      }).catch(error => this.fail(id, record, error));
+    } catch (error) { this.fail(id, record, error); }
+  }
+
+  release() {
+    if (this.state !== 'listening' || this.releasedAt !== undefined) return;
+    this.releasedAt = this.deps.now();
+    this.message = 'Finishing transcript…';
+    this.changed();
+    this.capture?.stop();
+    if (this.recognitionResult) this.finishRecognition(this.generation, this.current!);
+  }
+
+  private finishRecognition(id: number, record: ConversationRecord) {
+    const result = this.recognitionResult!;
+    record.latencyMs.stt = Math.max(0, result.endedAt - this.releasedAt!);
+    this.capture = undefined;
+    void this.send(id, record, result.transcript, this.releasedAt!);
+  }
+
+  submitText(text: string) {
+    const parsed = BrimRequestSchema.safeParse({ transcript: text });
+    if (!parsed.success) {
+      this.message = 'Enter a message of 1–2000 characters.';
+      this.changed();
+      return;
+    }
+    this.cancel();
+    this.deps.unlockAudio();
+    const record = this.newRecord('text');
+    void this.send(this.generation, record, parsed.data.transcript, this.deps.now());
+  }
+
+  private async send(id: number, record: ConversationRecord, transcript: string, speechEnd: number) {
+    if (id !== this.generation) return;
+    const parsed = BrimRequestSchema.safeParse({ transcript });
+    if (!parsed.success) { this.fail(id, record, new Error("Didn't catch a final transcript. Try again or use text.")); return; }
+    this.transcript = record.transcript = parsed.data.transcript;
+    this.state = 'thinking';
+    this.message = 'Waiting for Brim…';
+    this.abort = new AbortController();
+    const signal = this.abort.signal;
+    const thinkStart = this.deps.now();
+    this.changed();
+    try {
+      const result = await this.deps.reply(record.transcript, signal);
+      if (id !== this.generation) return;
+      record.latencyMs.think = this.deps.now() - thinkStart;
+      record.response = this.response = result.response;
+      record.source = result.source;
+      this.message = `${result.source === 'local' ? 'Local fallback' : 'OpenAI'} reply. Preparing speech…`;
+      this.changed();
+      await this.deps.speak(result.response.reply, signal, mode => {
+        if (id !== this.generation) return;
+        if (record.latencyMs.firstAudio === null) record.latencyMs.firstAudio = this.deps.now() - speechEnd;
+        record.audio = mode;
+        this.state = 'speaking';
+        this.message = `${result.source === 'local' ? 'Local fallback' : 'OpenAI'} · ${mode}`;
+        this.changed();
+      }, notice => {
+        if (id !== this.generation) return;
+        record.notices.push(notice);
+        this.message = notice;
+        this.changed();
+      });
+      if (id !== this.generation) return;
+      record.status = 'completed';
+      attachTurnLog(record);
+      this.state = 'idle';
+      this.message = `${result.source === 'local' ? 'Local fallback' : 'OpenAI'} · Ready for another call.${record.notices.length ? ' ' + record.notices.at(-1) : ''}`;
+      this.current = undefined;
+      this.changed();
+    } catch (error) { this.fail(id, record, error); }
+  }
+
+  private fail(id: number, record: ConversationRecord, error: unknown) {
+    if (id !== this.generation) return;
+    this.abort?.abort();
+    this.deps.stopAudio();
+    record.status = 'failed';
+    record.error = error instanceof Error ? error.message : 'Conversation failed. Try again.';
+    this.capture = undefined;
+    this.current = undefined;
+    this.state = 'idle';
+    this.message = record.error;
+    this.changed();
+  }
+}

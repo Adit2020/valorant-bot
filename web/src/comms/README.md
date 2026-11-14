@@ -1,0 +1,1 @@
+Step 1a owner A: `brimClient.ts` sends text and validates the voice-only response. Keyword matching, game-action validation, and grounded callouts remain for later steps. Import shared contracts rather than duplicating types.

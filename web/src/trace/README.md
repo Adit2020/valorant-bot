@@ -1,0 +1,1 @@
+Step 1a: `log.ts` defines conversation records and JSON export. It attaches an unchanged shared TurnLog only to completed OpenAI voice turns with every timing available. Local/text/failed/interrupted records keep explicit source/status and null for unavailable metrics. Gameplay events and scoring remain deferred.

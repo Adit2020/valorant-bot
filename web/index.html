@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="theme-color" content="#000000"/><title>BRIM · Your voice teammate</title></head>
+<body><main>
+<section class="voice-stage" aria-label="Brim voice stage" data-state="idle">
+  <header><h1>BRIM</h1><div class="header-controls"><span class="state"><i aria-hidden="true"></i><span id="voice-state" role="status">Idle</span></span><div class="mode" role="group" aria-label="Mode (preview only)"><button type="button" aria-pressed="true" data-mode="learn">Learn</button><button type="button" aria-pressed="false" data-mode="match">Match</button></div></div></header>
+  <div class="voice-center"><canvas id="waveform" aria-hidden="true"></canvas>
+  <div class="captions"><p id="brim-reply" aria-live="polite"></p><p id="transcript" aria-live="polite"></p></div>
+  <div class="talk-controls"><button id="push-to-talk" type="button" aria-keyshortcuts="Space" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M9 22h6"/></svg><span>Hold <kbd>SPACE</kbd> to talk</span></button><button id="stop" class="quiet" type="button" aria-label="Stop current conversation">Stop</button></div>
+  <p id="voice-status" role="status">Hold Space to talk, or type a message.</p><p id="audio-status" role="status"></p>
+  <form id="text-form"><label class="sr-only" for="message">Text fallback</label><input id="message" maxlength="2000" placeholder="Or type your call…" autocomplete="off" required/><button type="submit" aria-label="Send message">Send <span aria-hidden="true">↗</span></button></form>
+  </div><footer><span id="backend-status" role="status">Connecting…</span><span>AI-generated voice</span></footer>
+</section>
+<section class="map-placeholder" aria-label="Future Bind A map"><span>BIND A</span><p>Map coming next</p><small>Voice check only · no live round</small></section>
+<section class="history"><div class="history-heading"><details id="history"><summary>Conversation history <span id="turn-count">0</span></summary><ol id="chat-log"></ol></details><button id="export-trace" class="quiet" type="button">Download trace</button></div></section>
+<details id="mic-check" hidden><summary>Development tools</summary><button id="test-mic" type="button">Test microphone permission</button><p id="mic-status" role="status">Permission check only. Tracks stop immediately.</p></details>
+</main><script type="module" src="/src/main.ts"></script></body></html>

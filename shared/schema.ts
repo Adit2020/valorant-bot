@@ -1,0 +1,64 @@
+import { z } from 'zod';
+
+export const RegionIdSchema = z.enum([
+  'a_lobby', 'a_short', 'a_link', 'showers', 'uhall', 'heaven',
+  'truck', 'triple', 'default', 'cubby', 'a_ct', 'tp',
+]);
+export type RegionId = z.infer<typeof RegionIdSchema>;
+
+export const ActionSchema = z.discriminatedUnion('type', [
+  z.strictObject({ type: z.enum(['smoke', 'molly']), target: RegionIdSchema }),
+  z.strictObject({ type: z.literal('plant'), target: z.enum(['default', 'alt']) }),
+  z.strictObject({ type: z.enum(['move', 'hold']), target: RegionIdSchema }),
+  z.strictObject({ type: z.enum(['go', 'wait', 'fallback']) }),
+]);
+export type Action = z.infer<typeof ActionSchema>;
+
+export const BrimResponseSchema = z.strictObject({
+  reply: z.string(),
+  actions: z.array(ActionSchema),
+  needs: z.enum(['target', 'site', 'count']).nullable(),
+});
+export type BrimResponse = z.infer<typeof BrimResponseSchema>;
+
+export const GameStateForLLMSchema = z.strictObject({
+  phase: z.enum(['buy', 'live', 'post_plant']),
+  t: z.number(),
+  mode: z.enum(['learn', 'match']),
+  brim: z.strictObject({
+    region: RegionIdSchema,
+    smokesLeft: z.number(),
+    mollyLeft: z.number(),
+    hasSpike: z.boolean(),
+  }),
+  allies: z.array(z.strictObject({ name: z.string(), region: RegionIdSchema, alive: z.boolean() })),
+  knownEnemies: z.array(z.strictObject({ region: RegionIdSchema, count: z.number(), secondsAgo: z.number() })),
+  play: z.enum(['fast_plant', 'fast_rush', 'slow_push']).nullable(),
+});
+export type GameStateForLLM = z.infer<typeof GameStateForLLMSchema>;
+
+export const TurnLogSchema = z.strictObject({
+  t: z.number(),
+  transcript: z.string(),
+  path: z.enum(['keyword', 'llm']),
+  response: BrimResponseSchema,
+  validator: z.strictObject({ ok: z.boolean(), reason: z.string().optional() }),
+  latencyMs: z.strictObject({ stt: z.number(), think: z.number(), firstAudio: z.number() }),
+});
+export type TurnLog = z.infer<typeof TurnLogSchema>;
+
+export const BrimEventSchema = z.strictObject({
+  t: z.number(), kind: z.enum(['saw', 'decided', 'said', 'did']), detail: z.string(),
+});
+export type BrimEvent = z.infer<typeof BrimEventSchema>;
+
+// Existing text-only callers remain valid; context is optional until simulation exists.
+export const BrimRequestSchema = z.strictObject({
+  transcript: z.string().trim().min(1).max(2000),
+  gameState: GameStateForLLMSchema.optional(),
+});
+export type BrimRequest = z.infer<typeof BrimRequestSchema>;
+
+export const HealthResponseSchema = z.strictObject({ status: z.literal('ok') });
+
+export const TtsRequestSchema = z.strictObject({ text: z.string().trim().min(1).max(240) });

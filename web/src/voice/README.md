@@ -1,0 +1,1 @@
+Step 1a owner A: `stt.ts` wraps Chrome recognition; `controls.ts` binds Space/pointer input; `conversation.ts` owns state and cancellation; `tts.ts` streams hosted MP3 through an audio element or uses browser synthesis. Analyser access is ready for Step 1b; no waveform or volume animation is implemented.

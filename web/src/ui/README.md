@@ -1,0 +1,1 @@
+Step 1b: `waveform.ts` owns the canvas/resize/reduced-motion loop; `subtitles.ts` owns word spans, highlighting and the delayed fade. `main.ts` composes these with the existing voice state and conversation records. Later HUD, buy phase, map and results remain deferred.
