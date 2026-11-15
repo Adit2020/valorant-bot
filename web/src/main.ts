@@ -5,7 +5,7 @@ import { Conversation } from './voice/conversation.js';
 import { bindPushToTalk } from './voice/controls.js';
 import { startCapture } from './voice/stt.js';
 import { SpeechOutput } from './voice/tts.js';
-import { downloadTrace } from './trace/log.js';
+import { downloadTrace, type BotKind } from './trace/log.js';
 import { MicrophoneLevels } from './voice/audioLevels.js';
 import { Waveform } from './ui/waveform.js';
 import { Subtitles } from './ui/subtitles.js';
@@ -13,6 +13,8 @@ import { mountMapPanel, type Mode } from './ui/mapPanel.js';
 import './styles/theme.css';
 
 const element = <T extends HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
+// Comparison group for the transfer test: ?bot=plain says "Copy." to everything and never pushes back.
+const bot: BotKind = new URLSearchParams(location.search).get('bot') === 'plain' ? 'plain' : 'relai';
 const backendStatus = element<HTMLParagraphElement>('#backend-status');
 async function checkBackend(): Promise<void> {
   try {
@@ -38,7 +40,7 @@ const conversation: Conversation = new Conversation({
     : liveReply(mapPanel.round, mapPanel.roundId, mode, text, signal, trace => {
       conversation.records.at(-1)!.command = trace;
       mapPanel.trackCommand(trace);
-    }),
+    }, undefined, { plain: bot === 'plain' }),
   said: (record) => mapPanel.said(record),
   speak: (...args) => speech.speak(...args),
   stopAudio: () => speech.stop(), unlockAudio: () => speech.unlock(),
@@ -94,6 +96,7 @@ const mapPanel = mountMapPanel(element('.map-panel'), {
   isBrimSpeaking: () => conversation.state === 'speaking',
   announce: (text, chip) => conversation.announce(line(text, 'round'), chip),
   voice: conversation,
+  bot,
   toggleMode: () => setMode(mode === 'learn' ? 'match' : 'learn'),
 });
 if (mapPanel.phase === 'buy') conversation.announce(line("What's the call?", 'round'));
@@ -109,7 +112,7 @@ element<HTMLFormElement>('#text-form').addEventListener('submit', event => {
   conversation.submitText(element<HTMLInputElement>('#message').value);
 });
 element('#stop').addEventListener('click', () => conversation.cancel());
-element('#export-trace').addEventListener('click', () => downloadTrace(conversation.records, mapPanel.trace()));
+element('#export-trace').addEventListener('click', () => downloadTrace(conversation.records, mapPanel.trace(), bot));
 window.addEventListener('pagehide', () => { unbind(); mapPanel.dispose(); waveform.dispose(); subtitles.dispose(); mic.dispose(); speech.dispose(); }, { once: true });
 
 if (import.meta.env.DEV) {

@@ -22,11 +22,20 @@ async function interpret(transcript: string, state: GameStateForLLM, parent: Abo
   } finally { signal.removeEventListener('abort', stop); }
 }
 
+export interface LiveReplyOptions {
+  /** Comparison bot: says "Copy." to everything, never pushes back, and enqueues whatever it parsed without validation. */
+  plain?: boolean;
+}
+export const PLAIN_REPLY = 'Copy.';
+
 export async function liveReply(round: Round, roundId: number, mode: GameStateForLLM['mode'],
-  transcript: string, signal: AbortSignal, record: (trace: CommandTrace) => void, classify = classifyLive): Promise<ReplyResult> {
+  transcript: string, signal: AbortSignal, record: (trace: CommandTrace) => void, classify = classifyLive,
+  options: LiveReplyOptions = {}): Promise<ReplyResult> {
   const controller = round.brim;
   const start = performance.now();
+  const plain = !!options.plain;
   const trace: CommandTrace = { roundId, t: round.time, path: 'keyword', goalIds: [], validator: { ok: false } };
+  if (plain) trace.plain = true;
   record(trace);
   function guard() {
     if (signal.aborted || controller !== round.brim) {
@@ -35,9 +44,21 @@ export async function liveReply(round: Round, roundId: number, mode: GameStateFo
     }
   }
   function reject(reply: string, reason = reply, needs: BrimResponse['needs'] = null): ReplyResult {
+    // The plain bot never pushes back: the reason stays in the trace, the player only hears "Copy."
+    if (plain) { reply = PLAIN_REPLY; needs = null; }
     trace.validator = { ok: false, reason };
     trace.feedback = reply;
     return { source: trace.path === 'keyword' ? 'keyword' : 'local', response: response(reply, [], needs) };
+  }
+  // Plain bot: no validator, no plan accounting. Bad goals fail later in the controller, like a dumb bot.
+  function obey(value: BrimResponse): ReplyResult {
+    guard();
+    for (const action of value.actions) {
+      try { trace.goalIds.push(controller.addGoal(action, 'command')); } catch { /* closed controller: drop */ }
+    }
+    trace.validator = trace.goalIds.length ? { ok: true, reason: 'Plain bot: not validated' } : { ok: false, reason: 'Plain bot: no goal accepted' };
+    trace.feedback = PLAIN_REPLY;
+    return { source: trace.path === 'llm' ? 'openai' : 'keyword', response: response(PLAIN_REPLY) };
   }
   try {
     guard();
@@ -45,6 +66,7 @@ export async function liveReply(round: Round, roundId: number, mode: GameStateFo
     if (problem) return reject(problem);
     const match = matchKeyword(transcript);
     let value: BrimResponse;
+    if (match.kind === 'your-call' && plain) return reject(PLAIN_REPLY, 'Plain bot: no decision');
     if (match.kind === 'your-call') {
       const decision = yourCall(round);
       value = decision.value;
@@ -66,7 +88,7 @@ export async function liveReply(round: Round, roundId: number, mode: GameStateFo
       problem = liveProblem(round);
       if (problem) return reject(problem);
       trace.interpretation = value;
-      if (value.actions.length) {
+      if (value.actions.length && !plain) {
         const named = namedTargets(transcript);
         const requested = value.actions.flatMap(a => 'target' in a ? [a.target] : []);
         if (requested.length !== named.length || requested.some((target, i) => target !== named[i]))
@@ -78,6 +100,7 @@ export async function liveReply(round: Round, roundId: number, mode: GameStateFo
       const clarification = trace.path === 'llm' && !value.needs ? "Didn't catch that." : value.reply;
       return reject(clarification, clarification, value.needs);
     }
+    if (plain) return obey(value);
     const validation = validateActions(round, value.actions);
     if (validation.error) return reject(validation.error);
     // All checks and FIFO submissions happen synchronously in the same JS turn.

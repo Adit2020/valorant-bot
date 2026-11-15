@@ -1,4 +1,4 @@
-import type { CommandTrace, ConversationRecord, RoundTrace } from '../trace/log.js';
+import type { BotKind, CommandTrace, ConversationRecord, RoundTrace } from '../trace/log.js';
 import type { Action, BrimEvent, PlayId } from '../../../shared/schema.js';
 import type { Priority } from '../sim/brim.js';
 import { hasLOS } from '../map/geometry.js';
@@ -21,6 +21,8 @@ export interface MapPanelHooks {
   toggleMode(): void;
   announce(text: string, chip?: string): void;
   voice: Pick<Conversation, 'state' | 'activeCallout' | 'tryCallout' | 'cancel'>;
+  /** Which teammate brain answers calls. 'plain' labels the HUD so session screenshots self-identify. */
+  bot?: BotKind;
 }
 
 export interface MapPanel {
@@ -98,7 +100,8 @@ export function mountMapPanel(root: HTMLElement, hooks: MapPanelHooks): MapPanel
     const buying = round.phase === 'buy';
     choices.hidden = !buying;
     const name = round.play ? plays[round.play].name : practice ? 'Plant drill' : 'Live drill';
-    set(tag, (buying ? '' : name + ' · ') + 'Seed ' + round.seed);
+    // Plain bot sessions label themselves for screenshots (TONIGHT.md Task 1).
+    set(tag, hooks.bot === 'plain' ? 'Plain bot · Seed ' + round.seed : (buying ? '' : name + ' · ') + 'Seed ' + round.seed);
     const result = round.outcome === 'win' ? 'Round won' : round.outcome === 'loss' ? 'Round lost' : 'Finished';
     set(hud.timerKey, buying ? 'Buy phase' : round.finished ? result : 'Live');
     set(hud.timer, clock(buying ? round.buyRemainingMs / 1000 : ROUND_TICKS * DT - round.time));

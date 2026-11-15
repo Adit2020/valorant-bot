@@ -12,6 +12,8 @@ export interface CommandTrace {
   feedback?: string;
   decisionTime?: number;
   thinkMs?: number;
+  /** Set when the comparison plain bot handled this call (no validation, always "Copy."). */
+  plain?: boolean;
 }
 export interface RoundTrace {
   roundId: number;
@@ -48,12 +50,16 @@ export function attachTurnLog(record: ConversationRecord): void {
   }
 }
 
-export function downloadTrace(records: ConversationRecord[], rounds: RoundTrace[]): void {
-  const blob = new Blob([JSON.stringify({ version: 2, scope: 'gameplay', records, rounds }, null, 2)], { type: 'application/json' });
+export type BotKind = 'relai' | 'plain';
+export interface TraceFile { version: 2; scope: 'gameplay'; bot?: BotKind; records: ConversationRecord[]; rounds: RoundTrace[] }
+
+export function downloadTrace(records: ConversationRecord[], rounds: RoundTrace[], bot: BotKind = 'relai'): void {
+  const file: TraceFile = { version: 2, scope: 'gameplay', bot, records, rounds };
+  const blob = new Blob([JSON.stringify(file, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = 'brim-voice-trace.json';
+  link.download = `relai-trace-${bot}-seed${rounds.at(-1)?.seed ?? 'unknown'}.json`;
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
