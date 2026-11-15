@@ -1,4 +1,4 @@
-import { BrimResponseSchema, LiveResponseSchema, type BrimResponse, type GameStateForLLM } from '../../../shared/schema.js';
+import { BrimResponseSchema, LiveResponseSchema, type Action, type BrimResponse, type GameStateForLLM } from '../../../shared/schema.js';
 import type { Round } from '../sim/round.js';
 import type { CommandTrace } from '../trace/log.js';
 import { classifyLive, type ReplyResult } from './brimClient.js';
@@ -20,6 +20,13 @@ async function interpret(transcript: string, state: GameStateForLLM, parent: Abo
     signal.throwIfAborted();
     return LiveResponseSchema.parse(result);
   } finally { signal.removeEventListener('abort', stop); }
+}
+
+/** Grounding for model output: its targets must be exactly the callouts the player said, in order. */
+export function targetsMatchTranscript(transcript: string, actions: readonly Action[]) {
+  const named = namedTargets(transcript);
+  const requested = actions.flatMap(a => 'target' in a ? [a.target] : []);
+  return requested.length === named.length && requested.every((target, i) => target === named[i]);
 }
 
 export interface LiveReplyOptions {
@@ -88,12 +95,8 @@ export async function liveReply(round: Round, roundId: number, mode: GameStateFo
       problem = liveProblem(round);
       if (problem) return reject(problem);
       trace.interpretation = value;
-      if (value.actions.length && !plain) {
-        const named = namedTargets(transcript);
-        const requested = value.actions.flatMap(a => 'target' in a ? [a.target] : []);
-        if (requested.length !== named.length || requested.some((target, i) => target !== named[i]))
-          return reject('Which targets, in order?', 'Model targets differ from transcript', 'target');
-      }
+      if (value.actions.length && !plain && !targetsMatchTranscript(transcript, value.actions))
+        return reject('Which targets, in order?', 'Model targets differ from transcript', 'target');
     }
     trace.interpretation = BrimResponseSchema.parse(value);
     if (!value.actions.length && !trace.decision) {
