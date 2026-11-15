@@ -105,15 +105,15 @@ Numbers for the Devpost, the pitch and the video. Every number has a source at t
 
 | Finding | Design choice |
 |---|---|
-| Most callouts are ≤ 8 words; info goes stale in seconds | Calls are scored for brevity; Brim replies in ≤ 12 words; **real-time** play with latency targets |
-| 69.5% of useful callouts include a location | Brim's validator **requires a location** and pushes back without one ("Smoke where?") |
-| Experts move from uncertainty to acknowledgement | Brim **acknowledges every call** ("Copy") and asks for missing info, modeling the expert pattern |
-| Experts stay factual and on-task | Brim's own callouts are short, factual and based on what he sees; no small talk during fights |
+| Most callouts are ≤ 8 words; info goes stale in seconds | Calls are scored for brevity; RelAI replies in ≤ 12 words; **real-time** play with latency targets |
+| 69.5% of useful callouts include a location | RelAI's validator **requires a location** and pushes back without one ("Smoke where?") |
+| Experts move from uncertainty to acknowledgement | RelAI **acknowledges every call** ("Copy") and asks for missing info, modeling the expert pattern |
+| Experts stay factual and on-task | RelAI's own callouts are short, factual and based on what it sees; no small talk during fights |
 | 59% of women hide their identity; many avoid voice chat | A **judgment-free practice partner** before playing ranked with strangers |
 | CS bots: a fixed menu to all bots; bots may ignore orders | Open-ended voice input, aimed at one teammate, and every accepted call is **carried out and logged** |
 | PUBG Ally said "Okay" without acting; talked during fights | The trace confirms every acknowledged action actually ran; chatter is muted in fights |
 | PUBG Ally: speed beats accuracy; cloud LLM costs ~$5–7/match | Instant keyword path for common calls; the LLM only for messy speech; small, fast model |
-| Players prefer predictable teammates | Brim's fast layer is rule-based and readable; the behavior trace explains each decision |
+| Players prefer predictable teammates | RelAI's fast layer is rule-based and readable; the behavior trace explains each decision |
 
 ---
 

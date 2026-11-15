@@ -35,7 +35,7 @@ These are project defaults; live provider access/performance was not verified be
 4. Test text fallback. Space inside the input is normal typing; use the microphone hold button or move focus outside the input before using Space. P/R/L/D also ignore text fields.
 5. Record and listen to a short sample: confirm your voice, teammate audio and readable subtitles. Native playback callbacks and the simulated browser-synthesis waveform do **not** verify physical output. Do one complete real-voice rehearsal, inspect the trace, and keep it out of participant evidence.
 
-A longer checklist is in [RELEASE-QA.md](RELEASE-QA.md). Automation used scripted recognition/fake mic metering, with **unmocked native browser synthesis** for demo QA. It did not verify real spoken input or hear speakers.
+Automation used scripted recognition/fake mic metering, with **unmocked native browser synthesis** for demo QA. It did not verify real spoken input or hear speakers.
 
 ## Main take
 

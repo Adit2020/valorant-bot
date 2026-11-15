@@ -12,3 +12,7 @@ web/dist/
 # Transfer-test traces and scorer output (participant data, never committed)
 sessions/
 results/
+
+# Local AI assistant notes (kept on each machine, not published)
+CLAUDE.md
+TONIGHT.md
