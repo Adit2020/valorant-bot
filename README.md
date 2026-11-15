@@ -1,6 +1,6 @@
-# Talk to Brim
+# RelAI
 
-Talk to Brim pairs a voice teammate with a deterministic, 20 Hz Bind A simulation. Call a strategy during the 15-second buy phase, type it, or click its chip. Brim confirms the call and the seeded attack begins. Fast Plant is the timeout default. See the [simulation guide](web/src/sim/README.md) for replay, combat rules and the Step 4 console demos and goal API, or [PLAN.md](PLAN.md) for the project plan.
+RelAI pairs a voice teammate with a deterministic, 20 Hz Bind A simulation. (Its code name is still Brim: `BrimController`, `/api/brim`.) Call a strategy during the 15-second buy phase, type it, or click its chip. RelAI confirms the call and the seeded attack begins. Fast Plant is the timeout default. See the [simulation guide](web/src/sim/README.md) for replay, combat rules and the Step 4 console demos and goal API, or [PLAN.md](PLAN.md) for the project plan.
 
 ## Run
 

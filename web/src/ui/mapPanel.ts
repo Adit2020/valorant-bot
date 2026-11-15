@@ -219,7 +219,7 @@ export function mountMapPanel(root: HTMLElement, hooks: MapPanelHooks): MapPanel
     const voice = hooks.voice;
     const active = voice.activeCallout;
     if (active && (!round.canCallout || (voice.state === 'thinking' && !calls.isCurrent(active.sighting)))) {
-      voice.cancel(round.canCallout ? 'Sighting changed before playback' : 'Brim died or the round ended');
+      voice.cancel(round.canCallout ? 'Sighting changed before playback' : 'RelAI died or the round ended');
     }
     if (!round.canCallout || voice.state !== 'idle') return;
     const call = calls.take();

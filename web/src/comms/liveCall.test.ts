@@ -95,7 +95,7 @@ test('navigation, death, buy phase and elapsed round are checked at commit', asy
   assert.match((await call(p,'Go Triple',noModel)).response.reply,/reach/);
   const dead = new Round(2,{liveDrill:true});
   while (!dead.brim.inspect().closed && !dead.finished) dead.step();
-  assert.equal((await call(dead,'Wait',noModel)).response.reply,'Brim is down.');
+  assert.equal((await call(dead,'Wait',noModel)).response.reply,'RelAI is down.');
   assert.equal((await call(new Round(),'Wait',noModel)).trace.validator.ok,false);
   while (!dead.finished) dead.step();
   assert.equal((await call(dead,'Wait',noModel)).response.reply,'Round is not live.');
@@ -212,4 +212,10 @@ test('plain bot says "Copy." to everything, never pushes back, and obeys whateve
   // Same calls in the default bot are unchanged.
   assert.equal((await call(practice(), 'smoke over there', noModel)).response.reply, 'Smoke where?');
   assert.equal((await call(practice(), 'smoke heaven, smoke vent, smoke u hall, smoke tower', noModel)).response.reply, 'Out of smokes.');
+});
+
+test('RelAI name is stripped from the front of a call, including common mis-transcriptions', () => {
+  for (const name of ['RelAI', 'relay', 'Real AI', 'rely', 'Brim'])
+    assert.deepEqual(match(name + ' smoke heaven').actions, [smoke]);
+  assert.deepEqual(match('Relay, smoke Heaven and U-Hall').actions, compoundActions.slice(0, 2));
 });

@@ -9,7 +9,7 @@ import { response } from './keywordMatcher.js';
 
 export function liveProblem(round: Round): string | undefined {
   if (round.phase !== 'live' || round.finished) return 'Round is not live.';
-  if (round.brim.inspect().closed || !round.snapshot().agents.find(a => a.isBrim)?.alive) return 'Brim is down.';
+  if (round.brim.inspect().closed || !round.snapshot().agents.find(a => a.isBrim)?.alive) return 'RelAI is down.';
 }
 
 export function gameState(round: Round, mode: GameStateForLLM['mode']): GameStateForLLM | undefined {
@@ -39,7 +39,7 @@ export function yourCall(round: Round) {
   for (const c of contacts) {
     const region = regionAt(c.x, c.y);
     if (region) return { value: response('Will watch ' + REGION_BY_ID[region].name + '.', [{ type: 'hold', target: region }]),
-      reason: 'Brim observed ' + c.id + ' at ' + region };
+      reason: 'RelAI observed ' + c.id + ' at ' + region };
   }
   const state = round.brim.inspect();
   const current = state.queue.find(g => !state.cancelling.includes(g.id));

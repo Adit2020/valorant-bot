@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { withSpeechFallback } from './tts.js';
+import { spoken, withSpeechFallback } from './tts.js';
 
 test('hosted TTS failure falls back once and reports its mode', async () => {
   let fallback = 0;
@@ -27,4 +27,10 @@ test('failed hosted stream after playing never repeats the line in browser synth
   await assert.rejects(withSpeechFallback(async () => { throw new Error('stream stopped'); },
     async () => { fallbacks++; }, new AbortController().signal, () => {}, () => true), /stream stopped/);
   assert.equal(fallbacks, 0);
+});
+
+test('audio says "Relay" for RelAI; subtitles keep the name and word offsets line up', () => {
+  assert.equal(spoken('RelAI is down.'), 'Relay is down.');
+  assert.equal(spoken('RelAI is down.').length, 'RelAI is down.'.length);
+  assert.equal(spoken('Smoke Heaven.'), 'Smoke Heaven.');
 });

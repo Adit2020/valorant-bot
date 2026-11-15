@@ -38,7 +38,8 @@ export function matchKeyword(text: string): Match {
   if (/\b(enemy|enemies|defenders?|jett|killjoy|omen|chamber|viper|they|them)\b/.test(words))
     return resolved(response('Which target?', [], 'target'));
   // Commas between calls are separators; a comma after a vocative or filler is not.
-  const cleaned = text.toLowerCase().replace(/\b(?:brimstone|brim|please|hey|okay|ok|uh|um)\b\s*,?\s*/g, ' ')
+  // "RelAI" is often transcribed as relay, real AI or rely; the old name still works.
+  const cleaned = text.toLowerCase().replace(/\b(?:brimstone|brim|relai|relay|real ai|rely|please|hey|okay|ok|uh|um)\b\s*,?\s*/g, ' ')
     .replace(/\b(?:can you|could you|would you)\s+/g, '').trim();
   if (normalize(cleaned) === 'your call') return { kind: 'your-call' };
   if (!cleaned || aliases.has(normalize(cleaned)) || /^(?:is|are|where|who|did|how many)\b/.test(normalize(cleaned)))

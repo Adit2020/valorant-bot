@@ -197,7 +197,7 @@ export class Round {
     if (this.selected) { this.recoverSpike(); this.plantWithCarrier(); }
     this.sight = perceive(this.agents, smokes);
     this.generator.observe(this.tick, brim.alive && !this.finished ? this.observations('brim') : []);
-    if (!brim.alive || this.finished) this.controller.close(frame, brim.alive ? 'round ended' : 'Brim died');
+    if (!brim.alive || this.finished) this.controller.close(frame, brim.alive ? 'round ended' : 'RelAI died');
     return events;
   }
 

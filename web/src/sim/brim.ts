@@ -62,7 +62,7 @@ export class BrimController {
   private lastReaction = -Infinity;
 
   addGoal(action: Action, priority: Priority = 'command'): number {
-    if (this.closed) throw new Error('Brim cannot accept goals after death or round end');
+    if (this.closed) throw new Error('RelAI cannot accept goals after death or round end');
     const goal: Goal = { id: ++this.sequence, action: { ...action }, priority, status: 'queued', elapsed: 0 };
     this.goals.push(goal);
     return goal.id;

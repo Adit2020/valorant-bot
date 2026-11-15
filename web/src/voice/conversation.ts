@@ -165,7 +165,7 @@ export class Conversation {
     if (!parsed.success) { this.fail(id, record, new Error("Didn't catch a final transcript. Try again or use text.")); return; }
     this.transcript = record.transcript = parsed.data.transcript;
     this.state = 'thinking';
-    this.message = 'Waiting for Brim…';
+    this.message = 'Waiting for RelAI…';
     this.abort = new AbortController();
     const signal = this.abort.signal;
     const thinkStart = this.deps.now();

@@ -80,7 +80,7 @@ function render() {
     detail.className = 'log-detail';
     detail.textContent = `#${conversation.records.indexOf(record)+1} · ${record.t.toFixed(1)}s · ${record.status} · ${record.callout ? 'enemy sighting' : record.source === 'local' ? 'local fallback' : record.source || record.input}${record.audio ? ` · ${record.audio}` : ''}${record.error ? ` · ${record.error}` : ''}${record.notices.length ? ` · ${record.notices.at(-1)}` : ''}`;
     row.append(detail);
-    for (const [speaker,message] of [['You',record.transcript || (record.input === 'voice' ? '(no final transcript)' : '')], ['Brim',record.response?.reply]]) {
+    for (const [speaker,message] of [['You',record.transcript || (record.input === 'voice' ? '(no final transcript)' : '')], ['RelAI',record.response?.reply]]) {
       if (!message) continue;
       const line = document.createElement('p');
       const label = document.createElement('span'); label.className = 'speaker'; label.textContent = speaker!;

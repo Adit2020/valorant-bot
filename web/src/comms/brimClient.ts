@@ -13,9 +13,9 @@ export async function requestReply(transcript: string, signal: AbortSignal): Pro
   } catch (error) {
     if (signal.aborted) throw error;
     if (error instanceof DOMException && error.name === 'TimeoutError') {
-      throw new Error("Brim's API timed out. Restart npm run dev, then reload this page.");
+      throw new Error("RelAI's API timed out. Restart npm run dev, then reload this page.");
     }
-    throw new Error('Could not reach Brim’s API. Check the backend status and try again.');
+    throw new Error('Could not reach RelAI’s API. Check the backend status and try again.');
   }
   if (!response.ok) {
     const body = await response.json().catch(() => null) as { error?: { code?: string; message?: string } } | null;
@@ -23,7 +23,7 @@ export async function requestReply(transcript: string, signal: AbortSignal): Pro
   }
   const parsed = BrimResponseSchema.parse(await response.json());
   if (parsed.actions.length || parsed.needs !== null || !parsed.reply.trim() || parsed.reply.trim().split(/\s+/u).length > 12) {
-    throw new Error('Invalid voice-only Brim response.');
+    throw new Error('Invalid voice-only RelAI response.');
   }
   const source = response.headers.get('X-Brim-Source');
   if (source !== 'local' && source !== 'openai') throw new Error('Response source is missing.');

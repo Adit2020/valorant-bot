@@ -12,7 +12,7 @@ export type Role = 'C' | 'D' | 'I' | 'S'; // controller, duelist, initiator, sen
 /** One agent as the map should draw it this frame. Positions are world units (1000 x 700). */
 export interface AgentView {
   id: string;
-  tag: string; // 3-letter name tag, e.g. "BRM"
+  tag: string; // short name tag, e.g. "RAZ" or "RELAI"
   team: Team;
   role: Role;
   x: number;

@@ -122,7 +122,7 @@ export class SpeechOutput {
     try {
       const response = await fetch('/api/tts', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }), signal,
+        body: JSON.stringify({ text: spoken(text) }), signal,
       });
       if (!response.ok || !response.body) {
         const error = await response.json().catch(() => null) as { error?: { message?: string } } | null;
@@ -202,9 +202,9 @@ export class SpeechOutput {
   private browser(text: string, signal: AbortSignal, started: (mode: AudioMode) => void): Promise<void> {
     return new Promise((resolve, reject) => {
       const synth = window.speechSynthesis;
-      if (!synth) { reject(new Error('Speech synthesis unavailable. Brim’s reply remains visible.')); return; }
+      if (!synth) { reject(new Error('Speech synthesis unavailable. RelAI’s reply remains visible.')); return; }
       if (signal.aborted) { reject(signal.reason); return; }
-      const utterance = new SpeechSynthesisUtterance(text);
+      const utterance = new SpeechSynthesisUtterance(spoken(text));
       utterance.lang = 'en-US';
       const voice = synth.getVoices().find(voice => voice.lang.startsWith('en'));
       if (voice) utterance.voice = voice;
@@ -231,3 +231,6 @@ export class SpeechOutput {
     void this.context?.close();
   }
 }
+
+/** Audio text only: TTS reads "RelAI" as letters, so say "Relay". Same length, so boundary offsets still match the subtitle. */
+export const spoken = (text: string) => text.replace(/\bRelAI\b/g, 'Relay');
