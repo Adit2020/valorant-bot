@@ -1,6 +1,6 @@
 import { HealthResponseSchema } from '../../shared/schema.js';
 import { buyReply, line } from './comms/buyCall.js';
-import { requestReply } from './comms/brimClient.js';
+import { liveReply } from './comms/liveCall.js';
 import { Conversation } from './voice/conversation.js';
 import { bindPushToTalk } from './voice/controls.js';
 import { startCapture } from './voice/stt.js';
@@ -31,11 +31,15 @@ const subtitles = new Subtitles(element('#brim-reply'));
 let previousState = 'idle';
 let logSignature = '';
 const talkButton = element<HTMLButtonElement>('#push-to-talk');
-const conversation = new Conversation({
+const conversation: Conversation = new Conversation({
   capture: interim => startCapture(interim),
   reply: (text, signal) => mapPanel.phase === 'buy'
     ? buyReply(text, signal, mapPanel.selectPlay)
-    : requestReply(text, signal),
+    : liveReply(mapPanel.round, mapPanel.roundId, mode, text, signal, trace => {
+      conversation.records.at(-1)!.command = trace;
+      mapPanel.trackCommand(trace);
+    }),
+  said: (record) => mapPanel.said(record),
   speak: (...args) => speech.speak(...args),
   stopAudio: () => speech.stop(), unlockAudio: () => speech.unlock(),
   now: () => performance.now(), update: () => render(),
@@ -54,7 +58,7 @@ function render() {
   waveform.setState(state);
   element('#voice-state').textContent = state;
   talkButton.setAttribute('aria-pressed', String(holding));
-  element('#transcript').textContent = holding && conversation.transcript ? `you: ${conversation.transcript}` : '';
+  element('#transcript').textContent = conversation.transcript ? `you: ${conversation.transcript}` : '';
   if (conversation.response) subtitles.show(conversation.response.reply);
   else subtitles.clear();
   if (previousState === 'speaking' && state !== 'speaking') subtitles.finish();
@@ -105,7 +109,7 @@ element<HTMLFormElement>('#text-form').addEventListener('submit', event => {
   conversation.submitText(element<HTMLInputElement>('#message').value);
 });
 element('#stop').addEventListener('click', () => conversation.cancel());
-element('#export-trace').addEventListener('click', () => downloadTrace(conversation.records));
+element('#export-trace').addEventListener('click', () => downloadTrace(conversation.records, mapPanel.trace()));
 window.addEventListener('pagehide', () => { unbind(); mapPanel.dispose(); waveform.dispose(); subtitles.dispose(); mic.dispose(); speech.dispose(); }, { once: true });
 
 if (import.meta.env.DEV) {

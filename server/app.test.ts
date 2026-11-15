@@ -207,3 +207,35 @@ test('configured buy classifier uses SDK structured output containing only a nul
   const services = createVoiceServices({ ...config, llmProvider: 'openai', llmKey: 'test-only' }, transport);
   assert.deepEqual(await services.classifyBuy('Hold back until late', new AbortController().signal), { play: 'slow_push' });
 });
+
+test('live HTTP uses bounded SDK structured output and independently validates returned actions and dialogue', async () => {
+  const state = { phase: 'live', t: 0.5, mode: 'learn',
+    brim: { region: 'a_short', smokesLeft: 2, mollyLeft: 1, hasSpike: false }, allies: [], knownEnemies: [], play: 'fast_plant' };
+  const body = { transcript: 'Cover the sightline from Heaven', gameState: state };
+  const valid = { reply: 'Command accepted.', actions: [{ type: 'smoke', target: 'heaven' }], needs: null };
+  const transport: typeof fetch = async (_url, init) => {
+    const request = JSON.parse(String(init?.body));
+    assert.equal(request.text.format.name,'live_call');
+    assert.equal(request.text.format.strict,true);
+    assert.deepEqual(JSON.parse(request.input[0].content),body);
+    assert.equal(request.store,false);
+    return Response.json({ id: 'resp_live', object: 'response', status: 'completed', output: [
+      { id: 'msg_live', type: 'message', status: 'completed', role: 'assistant', content: [
+        { type: 'output_text', text: JSON.stringify(valid), annotations: [] },
+      ] },
+    ] });
+  };
+  const sdk = createVoiceServices({ ...config, llmProvider: 'openai', llmKey: 'test-only' }, transport);
+  await serve(sdk, async base => {
+    const res = await post(base,'/api/brim',body);
+    assert.equal(res.status,200); assert.equal(res.headers.get('X-Brim-Source'),'openai');
+    assert.deepEqual(await res.json(),valid);
+  });
+  await serve({ ...local, async reply() {
+    return { source: 'openai', response: { ...valid, reply: 'Heaven smoke landed.', actions: [] } };
+  } }, async base => {
+    const res = await post(base,'/api/brim',body);
+    assert.equal(res.status,502); assert.equal((await res.json()).error.code,'INVALID_LLM_RESPONSE');
+  });
+  await serve(local,async base => assert.equal((await post(base,'/api/brim',body)).status,503));
+});

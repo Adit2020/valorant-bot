@@ -1,4 +1,4 @@
-import { BrimRequestSchema, BrimResponseSchema, type BrimResponse } from '../../../shared/schema.js';
+import { BrimRequestSchema, BrimResponseSchema, type GameStateForLLM, type BrimResponse } from '../../../shared/schema.js';
 
 export interface ReplyResult { response: BrimResponse; source: 'local' | 'openai' | 'keyword' | 'round' }
 
@@ -28,4 +28,19 @@ export async function requestReply(transcript: string, signal: AbortSignal): Pro
   const source = response.headers.get('X-Brim-Source');
   if (source !== 'local' && source !== 'openai') throw new Error('Response source is missing.');
   return { response: parsed, source };
+}
+
+export async function classifyLive(transcript: string, gameState: GameStateForLLM, signal: AbortSignal): Promise<unknown> {
+  const res = await fetch('/api/brim', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(BrimRequestSchema.parse({ transcript, gameState })), signal,
+  });
+  if (res.status === 504) throw new DOMException('Live interpretation timed out', 'TimeoutError');
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.error?.code === 'INVALID_LLM_RESPONSE'
+      ? 'Invalid model output' : 'Live interpretation failed (HTTP ' + res.status + ')');
+  }
+  if (res.headers.get('X-Brim-Source') !== 'openai') throw new Error('Invalid live response source');
+  return res.json();
 }

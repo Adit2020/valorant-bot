@@ -3,7 +3,7 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { BuyRequestSchema, BuyCallSchema, BrimRequestSchema, TtsRequestSchema } from '../shared/schema.js';
 import { voiceConfig, llmTimeoutMs, ttsTimeoutMs } from './config.js';
-import { ApiError, createVoiceServices, validateConversationResponse, type VoiceServices } from './voice.js';
+import { ApiError, createVoiceServices, validateLiveResponse, validateConversationResponse, type VoiceServices } from './voice.js';
 
 function requestScope(res: ExpressResponse, timeout: number, code: string) {
   const controller = new AbortController();
@@ -41,16 +41,19 @@ export function createApp(services: VoiceServices, timeouts = { llm: llmTimeoutM
   app.post('/api/brim', async (req, res) => {
     const request = BrimRequestSchema.safeParse(req.body);
     if (!request.success) throw new ApiError(400, 'INVALID_REQUEST', 'Expected transcript (1–2000 characters) and optional valid gameState.');
-    const scope = requestScope(res, timeouts.llm, 'LLM_TIMEOUT');
+    const live = request.data.gameState && request.data.gameState.phase !== 'buy';
+    const scope = requestScope(res, live ? Math.min(2000, timeouts.llm) : timeouts.llm, 'LLM_TIMEOUT');
     try {
       const result = await scope.run(services.reply(request.data, scope.signal));
       if (!scope.signal.aborted) {
         res.set('X-Brim-Source', result.source).set('Cache-Control', 'no-store')
-          .json(validateConversationResponse(result.response));
+          .json(live ? validateLiveResponse(result.response) : validateConversationResponse(result.response));
       }
     } catch (error) {
       if (scope.signal.aborted) throw scope.signal.reason;
       if (error instanceof ApiError) throw error;
+      if (live && error instanceof Error && (error.name === 'ZodError' || error.name === 'SyntaxError'))
+        throw new ApiError(502, 'INVALID_LLM_RESPONSE', 'Invalid live call.');
       throw new ApiError(502, 'LLM_FAILED', 'Response generation failed. Try again or enable local mode.');
     } finally { scope.dispose(); }
   });

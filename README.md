@@ -187,3 +187,7 @@ Verification (November 14, 2026, Node 20.20): `npm run typecheck`, `npm run test
 ## Step 3: replay a live round
 
 Open the main page with `?seed=2026`; **R** replays that same seed. Omen's hold varies with the seed. The main page shows live allies and only the defenders Raze or Brim can currently see; **D** toggles the full scene. The 40-second scenario stops at its time limit. The spike stays with Sova or drops where he dies. The sandbox keeps the original Step 2 visual demo.
+
+## Step 6 · Mid-round commands
+
+Select a buy-phase play, then speak or type “Smoke Heaven and U-Hall, then move Triple.” The HUD tracks the command while the existing simulation deploys utility and moves Brim. “Smoke over there” asks for a target. “Your call” delegates to Brim’s deterministic current-objective policy. See the [live command pipeline and perception handoff](web/src/comms/README.md) and [round trace format](web/src/trace/README.md). Keyword calls work without hosted credentials.

@@ -1,4 +1,5 @@
-import type { Action, PlayId } from '../../../shared/schema.js';
+import type { CommandTrace, ConversationRecord, RoundTrace } from '../trace/log.js';
+import type { Action, BrimEvent, PlayId } from '../../../shared/schema.js';
 import type { Priority } from '../sim/brim.js';
 import { hasLOS } from '../map/geometry.js';
 import { DEFENDER_SPOTS, PLANT_SPOTS } from '../map/bindA.js';
@@ -23,6 +24,11 @@ export interface MapPanelHooks {
 
 export interface MapPanel {
   readonly phase: Round['phase'];
+  readonly round: Round;
+  readonly roundId: number;
+  trackCommand(trace: CommandTrace): void;
+  said(record: ConversationRecord): void;
+  trace(): RoundTrace[];
   selectPlay(id: PlayId): boolean;
   readonly brim: Round['brim'];
   setMode(mode: Mode): void;
@@ -55,6 +61,14 @@ export function mountMapPanel(root: HTMLElement, hooks: MapPanelHooks): MapPanel
   const lab = import.meta.env.DEV && query.get('agentLab');
   const practice = lab === 'practice';
   const round = new Round(param && /^\d{1,10}$/.test(param) ? Number(param) : 2026, { practice, liveDrill: lab === 'live' });
+  const status = $('#command-status');
+  let command: CommandTrace | undefined;
+  let roundId = 1;
+  const archive: RoundTrace[] = [];
+  const dialogue: BrimEvent[] = [];
+  const roundTrace = (end: RoundTrace['end']): RoundTrace => ({
+    roundId, seed: round.seed, end, events: [...round.brim.events(), ...dialogue].sort((a,b) => a.t - b.t),
+  });
   const tag = $('.hud-tag');
   const choices = $('#buy-plays');
   const chips = $('.play-chips');
@@ -113,6 +127,11 @@ export function mountMapPanel(root: HTMLElement, hooks: MapPanelHooks): MapPanel
   function restart() {
     effects.length = 0;
     map.clearEffects();
+    archive.push(roundTrace('restart'));
+    roundId++;
+    command = undefined;
+    dialogue.length = 0;
+    set(status, '');
     round.reset();
     fixed.reset();
     setPlaying(true);
@@ -213,11 +232,23 @@ export function mountMapPanel(root: HTMLElement, hooks: MapPanelHooks): MapPanel
   }
   document.addEventListener('visibilitychange', () => { lastFrame = performance.now(); }, on);
 
+  function commandStatus() {
+    if (round.brim.recovering) return 'Falling back to plan';
+    if (!command || command.thinkMs === undefined) return '';
+    if (!command.validator.ok) return command.feedback ?? 'Command failed';
+    if (!command.goalIds.length) return 'Continuing current order';
+    const states = command.goalIds.map(id => round.brim.goalStatus(id));
+    if (states.includes('failed') || states.includes('cancelled')) return 'Command failed';
+    if (states.every(s => s === 'done')) return 'Command completed';
+    if (states.some(s => s === 'active' || s === 'done')) return 'Command executing';
+    return 'Command accepted · queued';
+  }
   function tick() {
     frame = requestAnimationFrame(tick);
     advance(performance.now());
     const state = round.snapshot(designer.checked, round.finished ? 1 : fixed.alpha);
     showPhase();
+    set(status, commandStatus());
     const left = round.smokesLeft;
     set(hud.smokes, '●'.repeat(left) + '○'.repeat(3 - left));
     hud.smokes.setAttribute('aria-label', `${left} of 3 smokes left`);
@@ -234,7 +265,12 @@ export function mountMapPanel(root: HTMLElement, hooks: MapPanelHooks): MapPanel
   frame = requestAnimationFrame(tick);
 
   return {
-    selectPlay,
+    selectPlay, round, get roundId() { return roundId; },
+    trackCommand(trace) { command = trace; },
+    said(record) {
+      if (record.response) dialogue.push({ t: round.time, kind: 'said', detail: 'Turn ' + record.id + ': ' + record.response.reply });
+    },
+    trace() { return [...archive, roundTrace('current')]; },
     get phase() { return round.phase; },
     get brim() { return round.brim; },
     setMode(next) { mode = next; syncRate(); },

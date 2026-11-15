@@ -9,7 +9,7 @@ import { DT } from './loop.js';
 
 
 // Offset holds leave the carrier's route free and have a clear line to the spot.
-const cover: Record<keyof typeof PLANT_SPOTS, Vec> = { default: [540, 365], alt: [675, 275] };
+export const plantCover: Record<keyof typeof PLANT_SPOTS, Vec> = { default: [540, 365], alt: [675, 275] };
 const HOLD_TICKS = 20, STALL_TICKS = 60;
 export const PLANT_TICKS = 80;
 
@@ -57,6 +57,7 @@ export class BrimController {
   private cancellations = new Map<number, string>();
   private leg?: { to: Vec; lastPos: Vec; movedAt: number };
   private failures = 0;
+  private recoveryGoal?: Goal;
   private closed = false;
   private lastReaction = -Infinity;
 
@@ -74,7 +75,7 @@ export class BrimController {
   }
   inspect() {
     return structuredClone({ state: this.state, activeId: this.active?.id ?? null,
-      queue: this.pending(), goals: this.goals, destination: this.leg?.to ?? null,
+      queue: this.pending(), cancelling: [...this.cancellations.keys()], goals: this.goals, destination: this.leg?.to ?? null,
       distanceToTarget: this.leg ? dist(this.leg.lastPos, this.leg.to) : null,
       knownEnemies: Object.fromEntries(this.known), closed: this.closed });
   }
@@ -133,7 +134,8 @@ export class BrimController {
       // Abandon stale work; attempt the scripted route once. A blocked fallback holds.
       this.clearGoals();
       const id = this.addGoal({ type: 'go' }, 'plan');
-      this.goals.at(-1)!.recovery = true;
+      this.recoveryGoal = this.goals.at(-1)!;
+      this.recoveryGoal.recovery = true;
       this.emit(f.tick, 'decided', '#' + id + ' fall back to scripted route');
       this.failures = 0;
     }
@@ -216,7 +218,7 @@ export class BrimController {
         if (!f.carrier) { this.finish(f, false, 'no living spike carrier'); return; }
         const spot = PLANT_SPOTS[a.target];
         const carrying = f.carrier === 'brim';
-        const to = carrying ? spot : cover[a.target];
+        const to = carrying ? spot : plantCover[a.target];
         if (!carrying && !this.leg && !next.elapsed)
           this.emit(f.tick, 'decided', '#' + next.id + ' cover ' + f.carrier + ' at ' + a.target);
         if (dist(f.pos, to) >= 0.001) {
@@ -235,6 +237,11 @@ export class BrimController {
         return;
       }
     }
+  }
+  goalStatus(id: number) { return this.goals[id - 1]?.status; }
+  get recovering() {
+    const last = this.recoveryGoal;
+    return !!last && ['queued', 'active', 'paused'].includes(last.status);
   }
   get currentState() { return this.state; }
 }

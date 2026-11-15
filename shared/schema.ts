@@ -17,7 +17,7 @@ export const ActionSchema = z.discriminatedUnion('type', [
 export type Action = z.infer<typeof ActionSchema>;
 
 export const BrimResponseSchema = z.strictObject({
-  reply: z.string(),
+  reply: z.string().trim().min(1).max(240).refine(s => s.split(/\s+/u).length <= 12),
   actions: z.array(ActionSchema),
   needs: z.enum(['target', 'site', 'count']).nullable(),
 });
@@ -69,3 +69,14 @@ export type BrimRequest = z.infer<typeof BrimRequestSchema>;
 export const HealthResponseSchema = z.strictObject({ status: z.literal('ok') });
 
 export const TtsRequestSchema = z.strictObject({ text: z.string().trim().min(1).max(240) });
+
+// Model dialogue is a bounded vocabulary. The client phrases accepted actions from
+// validated intent and the current carrier. Free-form model claims never reach TTS.
+export const LiveResponseSchema = BrimResponseSchema.extend({
+  reply: z.enum(['Command accepted.', 'Which target?', 'Which site?', 'How many?', "Didn't catch that."]),
+}).refine(r => {
+  if (r.actions.length) return r.needs === null && r.reply === 'Command accepted.';
+  if (r.needs === null) return r.reply === "Didn't catch that.";
+  const question = { target: 'Which target?', site: 'Which site?', count: 'How many?' };
+  return r.reply === question[r.needs];
+}, 'Dialogue and actions must agree');

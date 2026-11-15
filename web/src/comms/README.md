@@ -1,1 +1,13 @@
-Step 1a owner A: `brimClient.ts` sends text and validates the voice-only response. Keyword matching, game-action validation, and grounded callouts remain for later steps. Import shared contracts rather than duplicating types.
+# Mid-round voice commands
+
+The live branch of ConversationDependencies.reply calls liveReply(round, roundId, mode, transcript, signal, record). The record callback attaches the mutable command trace to the originating conversation turn before any asynchronous work. Buy calls still use buyReply. Speech recognition submits once on finalization and release. Text goes through the same router.
+
+matchKeyword resolves full callout names and aliases, shares a verb across joined targets and keeps action order. “Fall back to A Short” moves to Short. Bare “fallback” retreats to the play spawn. Hold watches from the current position. An invalid or underspecified clause rejects the entire local command. Direct smoke placements are limited to the map’s five overhead landing spots.
+
+Unmatched calls POST a validated transcript and gameState(round, mode) to /api/brim. The server uses the configured Responses SDK, a strict vocabulary and a two-second maximum deadline. The browser also bounds the wait, checks the round’s controller identity and cancellation signal, and revalidates against current state. Model target mentions must match the transcript’s named targets in order. Unnamed or inferred destinations need clarification. Current knownEnemies comes only from round.observations('brim'). SecondsAgo is zero because these are current observations. If Brim’s position has no mapped region, the client asks for a repeat.
+
+validateActions checks the entire batch, including queued utility, matching play cues, terrain, projected movement, molly line of sight, the living carrier and plant zone. It schedules each accepted action via round.brim.addGoal(action, 'command') in one synchronous turn. The controller charges utility on deployment, replans after interruptions, and checks the world again during execution. Covering Sova uses the existing plant goal. Sova keeps the spike and follows his own Default planting route.
+
+“Your call” watches a currently observed contact, continues the highest-priority pending goal by ID, or holds and saves utility. Continuing an existing order does not enqueue a duplicate. The round trace records the reason.
+
+For Step 7, round.observations('brim') returns detached, currently seen opponents. regionAt(x, y) resolves callouts. round.brim.inspect().knownEnemies provides historical lastSeenTick and visible flags. round.brim.events() returns timestamped saw, decided and did events. Conversation.announce(result) uses the existing interrupting speech path. Check conversation.state before unsolicited speech to avoid interrupting a player. Playback start adds the actual said event to mapPanel.trace().

@@ -1,6 +1,24 @@
-import type { BrimResponse, TurnLog } from '../../../shared/schema.js';
+import type { BrimEvent, BrimResponse, TurnLog } from '../../../shared/schema.js';
 
 export type ConversationState = 'idle' | 'listening' | 'thinking' | 'speaking';
+export interface CommandTrace {
+  roundId: number;
+  t: number;
+  path: TurnLog['path'];
+  goalIds: number[];
+  validator: TurnLog['validator'];
+  interpretation?: BrimResponse;
+  decision?: string;
+  feedback?: string;
+  decisionTime?: number;
+  thinkMs?: number;
+}
+export interface RoundTrace {
+  roundId: number;
+  seed: number;
+  events: BrimEvent[];
+  end: 'restart' | 'current';
+}
 export interface ConversationRecord {
   id: number;
   t: number;
@@ -14,22 +32,23 @@ export interface ConversationRecord {
   error?: string;
   notices: string[];
   turnLog?: TurnLog;
+  command?: CommandTrace;
 }
 
 export function attachTurnLog(record: ConversationRecord): void {
   const { stt, think, firstAudio } = record.latencyMs;
   // The existing contract has no local path or N/A numbers. Preserve it exactly.
-  if (record.status === 'completed' && (record.source === 'openai' || record.source === 'keyword') && record.response &&
+  if (record.status === 'completed' && (record.command || record.source === 'openai' || record.source === 'keyword') && record.response &&
       stt !== null && think !== null && firstAudio !== null) {
     record.turnLog = {
-      t: record.t, transcript: record.transcript, path: record.source === 'keyword' ? 'keyword' : 'llm', response: record.response,
-      validator: { ok: true }, latencyMs: { stt, think, firstAudio },
+      t: record.command?.t ?? record.t, transcript: record.transcript, path: record.command?.path ?? (record.source === 'keyword' ? 'keyword' : 'llm'), response: record.response,
+      validator: record.command?.validator ?? { ok: true }, latencyMs: { stt, think, firstAudio },
     };
   }
 }
 
-export function downloadTrace(records: ConversationRecord[]): void {
-  const blob = new Blob([JSON.stringify({ version: 1, scope: 'voice-only', records }, null, 2)], { type: 'application/json' });
+export function downloadTrace(records: ConversationRecord[], rounds: RoundTrace[]): void {
+  const blob = new Blob([JSON.stringify({ version: 2, scope: 'gameplay', records, rounds }, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;

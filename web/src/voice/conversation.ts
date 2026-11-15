@@ -8,6 +8,7 @@ export interface ConversationDependencies {
   capture(interim: (text: string) => void): Capture;
   reply(transcript: string, signal: AbortSignal): Promise<ReplyResult>;
   speak(text: string, signal: AbortSignal, started: (mode: NonNullable<ConversationRecord['audio']>) => void, notice: (message: string) => void): Promise<void>;
+  said?(record: ConversationRecord): void;
   stopAudio(): void;
   unlockAudio(): void;
   now(): number;
@@ -144,14 +145,17 @@ export class Conversation {
   }
 
   private async deliver(id: number, record: ConversationRecord, result: ReplyResult, speechEnd: number, signal: AbortSignal) {
-    const label = { local: 'Local fallback', openai: 'OpenAI', keyword: 'Play call', round: 'Round' }[result.source];
+    const label = record.command ? (record.command.validator.ok ? 'Command accepted' : 'Command failed') : { local: 'Local fallback', openai: 'OpenAI', keyword: 'Play call', round: 'Round' }[result.source];
     record.response = this.response = result.response;
     record.source = result.source;
     this.message = `${label} reply. Preparing speech…`;
     this.changed();
     await this.deps.speak(result.response.reply, signal, mode => {
       if (id !== this.generation) return;
-      if (record.latencyMs.firstAudio === null) record.latencyMs.firstAudio = this.deps.now() - speechEnd;
+      if (record.latencyMs.firstAudio === null) {
+        record.latencyMs.firstAudio = this.deps.now() - speechEnd;
+        this.deps.said?.(record);
+      }
       record.audio = mode;
       this.state = 'speaking';
       this.message = `${label} · ${mode}`;

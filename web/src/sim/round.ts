@@ -11,6 +11,12 @@ import { DT } from './loop.js';
 import { mulberry32 } from './rng.js';
 import { perceive, publiclySeen } from './visibility.js';
 
+export function smokeSpot(target: RegionId) {
+  const spot = target === 'truck' ? SMOKE_TARGETS.truck_triple_gap :
+    Object.hasOwn(SMOKE_TARGETS, target) ? SMOKE_TARGETS[target as keyof typeof SMOKE_TARGETS] : undefined;
+  return spot?.at;
+}
+
 export const BUY_MS = 15000;
 export const ROUND_TICKS = 800;
 const SMOKE_FLIGHT = 12, SMOKE_LIFE = 300, SMOKE_RADIUS = 46;
@@ -36,7 +42,7 @@ export class Round {
   private controller = new BrimController();
   get smokesLeft() { return this.smokes; }
   get mollyLeft() { return this.mollies; }
-  get brim(): Pick<BrimController, 'addGoal' | 'cancelGoal' | 'clearGoals' | 'inspect' | 'events'> { return this.controller; }
+  get brim(): Pick<BrimController, 'addGoal' | 'cancelGoal' | 'clearGoals' | 'inspect' | 'events' | 'goalStatus' | 'recovering'> { return this.controller; }
   private agents;
   private clouds: Smoke[] = [];
   private sight: Map<string, string[]>;
@@ -111,9 +117,7 @@ export class Round {
   private deploy(kind: 'smoke' | 'molly', target: RegionId, from: Vec, events: RoundEvent[]) {
     // Sky Smoke is placed overhead at a designated open landing spot; incendiaries
     // are launched from Brim and must clear every crossed geometry cell.
-    const spot = target === 'truck' ? SMOKE_TARGETS.truck_triple_gap :
-      Object.hasOwn(SMOKE_TARGETS, target) ? SMOKE_TARGETS[target as keyof typeof SMOKE_TARGETS] : undefined;
-    const to = kind === 'smoke' ? spot?.at : destination(target);
+    const to = kind === 'smoke' ? smokeSpot(target) : destination(target);
     if (!to || !isOpen(...to)) return 'invalid ' + kind + ' target';
     if (kind === 'smoke') {
       if (!this.smokes) return 'no smoke charges';

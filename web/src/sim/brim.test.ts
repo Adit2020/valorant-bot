@@ -97,7 +97,13 @@ test('unreachable paths and blocked movement use bounded recovery; a blocked scr
     const frame: BrimFrame = { tick:0, pos:[372,656], contacts:[], route: () => traversable,
       deploy: () => undefined, stopPlant() {}, watch() {}, plant() {} };
     brain.addGoal({type:'move',target:'default'});
-    for (let i=0; i<300; i++) brain.step({...frame,tick:i+1});
+    let recoveryVisible = false;
+    for (let i=0; i<300; i++) {
+      brain.step({...frame,tick:i+1});
+      recoveryVisible ||= brain.recovering;
+    }
+    assert.equal(recoveryVisible,true);
+    assert.equal(brain.recovering,false);
     const {goals,queue,state} = brain.inspect();
     assert.equal(goals.length,2); assert.deepEqual(queue,[]); assert.equal(state,'hold');
     assert.ok(goals.every(g => g.status === 'failed' && g.reason === (traversable ? 'no movement progress' : 'unreachable destination')));
