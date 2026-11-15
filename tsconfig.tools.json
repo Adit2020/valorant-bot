@@ -6,5 +6,5 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["web/vite.config.ts", "web/src/**/*.test.ts", "shared/**/*.ts", "server/**/*.ts"]
+  "include": ["web/vite.config.ts", "web/src/**/*.test.ts", "shared/**/*.ts", "server/**/*.ts", "tools/**/*.ts"]
 }

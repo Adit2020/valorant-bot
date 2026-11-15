@@ -8,3 +8,7 @@ web/dist/
 *.tsbuildinfo
 .DS_Store
 .serena/
+
+# Transfer-test traces and scorer output (participant data, never committed)
+sessions/
+results/

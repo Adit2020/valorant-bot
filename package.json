@@ -12,8 +12,9 @@
     "dev:web": "vite --config web/vite.config.ts",
     "build": "npm run typecheck && vite build --config web/vite.config.ts && tsc -p server/tsconfig.json",
     "typecheck": "tsc -p web/tsconfig.json && tsc -p server/tsconfig.json --noEmit && tsc -p tsconfig.tools.json",
-    "test": "tsx --test shared/*.test.ts server/*.test.ts web/src/voice/*.test.ts web/src/comms/*.test.ts web/src/map/*.test.ts web/src/sim/*.test.ts",
-    "start:server": "node dist/server/index.js"
+    "test": "tsx --test shared/*.test.ts server/*.test.ts web/src/voice/*.test.ts web/src/comms/*.test.ts web/src/map/*.test.ts web/src/sim/*.test.ts web/src/trace/*.test.ts",
+    "start:server": "node dist/server/index.js",
+    "score": "tsx tools/score.ts"
   },
   "dependencies": {
     "express": "^5.1.0",
