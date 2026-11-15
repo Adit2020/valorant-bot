@@ -3,13 +3,13 @@ import { CALLOUT_ALIASES } from '../map/bindA.js';
 
 export const response = (reply: string, actions: Action[] = [], needs: BrimResponse['needs'] = null): BrimResponse =>
   ({ reply, actions, needs });
-const normalize = (text: string) => text.toLowerCase().replace(/['’]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+export const normalize = (text: string) => text.toLowerCase().replace(/['’]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 const aliases = new Map<string, RegionId>();
 for (const [id, words] of Object.entries(CALLOUT_ALIASES)) {
   for (const word of [id, ...words]) aliases.set(normalize(word), id as RegionId);
 }
-export function namedTargets(text: string) {
-  const targets: string[] = [];
+export function targetMentions(text: string) {
+  const targets: { id: RegionId | 'alt'; start: number; end: number }[] = [];
   // Consume whole aliases longest-first so "back truck" never licenses Back Site.
   const tokens = normalize(text).split(' ');
   for (let i = 0; i < tokens.length; i++) {
@@ -17,11 +17,13 @@ export function namedTargets(text: string) {
       if (i + size > tokens.length) continue;
       const words = tokens.slice(i, i + size).join(' ');
       const id = aliases.get(words) ?? (words === 'alt' || words === 'alternate' ? 'alt' : undefined);
-      if (id) { targets.push(id); i += size - 1; break; }
+      if (id) { targets.push({ id, start: i, end: i + size }); i += size - 1; break; }
     }
   }
   return targets;
 }
+
+export const namedTargets = (text: string) => targetMentions(text).map(mention => mention.id);
 
 type Match = { kind: 'response'; value: BrimResponse } | { kind: 'your-call' } | { kind: 'unknown' };
 const resolved = (value: BrimResponse): Match => ({ kind: 'response', value });

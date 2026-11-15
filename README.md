@@ -2,6 +2,10 @@
 
 RelAI pairs a voice teammate with a deterministic, 20 Hz Bind A simulation. (Its code name is still Brim: `BrimController`, `/api/brim`.) Call a strategy during the 15-second buy phase, type it, or click its chip. RelAI confirms the call and the seeded attack begins. Fast Plant is the timeout default. See the [simulation guide](web/src/sim/README.md) for replay, combat rules and the Step 4 console demos and goal API, or [PLAN.md](PLAN.md) for the project plan.
 
+## Demo and release readiness
+
+Use the [final demo runbook](docs/DEMO.md) for startup, the seeded voice/action sequence, hardware preflight and recovery. The [release QA record](docs/RELEASE-QA.md) separates scripted STT, native browser playback events, typed study fixtures and remaining real microphone/audio checks. No human transfer result or actual microphone latency is claimed.
+
 ## Run
 
 Use Node **22.12+** and npm, from the repository root:
@@ -21,6 +25,7 @@ Open **http://127.0.0.1:5184** in Chrome (map sandbox: **/sandbox.html**, dev on
 | `npm run typecheck` | Browser, server, shared contracts, configuration and tests |
 | `npm run test` | Contract, API, SDK transport, recognition, controls, lifecycle, map data and test-round tests |
 | `npm run build` | Typecheck, Vite frontend and compiled Node backend |
+| `npm run study -- sessions/human` | Validate six-round participant protocols and write paired Markdown/CSV/JSON reports |
 | `npm run start:server` | Run compiled backend after build |
 
 Frontend output: `web/dist/`. Backend: `dist/server/`, importing `dist/shared/`. Production hosting must serve the frontend and forward same-origin `/api` to Node; deployment is outside this step. Chrome's Web Speech recognition generally requires network access even when no paid API key is configured. Browser synthesis voices depend on the OS/browser installation.
@@ -38,6 +43,12 @@ Frontend output: `web/dist/`. Backend: `dist/server/`, importing `dist/shared/`.
 Space repeats are ignored; Space inside inputs/contenteditable remains normal typing. Pointer capture covers release outside the button. Pointer cancellation, lost capture, hidden document, and lost window focus **discard** the current turn rather than submitting accidental partial speech. Empty final recognition is not replaced with interim guesses. Recognition failures return to Idle with a message and leave text input usable.
 
 The development-only microphone permission checker from Step 0 remains available. It acquires audio permission and immediately stops all tracks. It does not record.
+
+## Fast Plant practice and measurement
+
+Learn shows the Fast Plant smoke command during buy and opening staging. Match hides the hint. For a pre/post evaluation launch, use `?phase=pre` or `?phase=post` before the player sees the page. These switches lock Match and disable Designer view and target hints, including keyboard shortcuts. Both flags use the same Plain evaluation bot, suppress coaching and hide validator HUD feedback, independently of the practice condition. For actual participant collection, use the URL-driven [Step 9a runbook](docs/STUDY.md): anonymous IDs, stable T/C assignment, four practice rounds, held-out A/B tests and audited paired reporting. Study URLs use typed input and local-only interpretation/speech to keep participant data off external services; ordinary gameplay retains the voice pipeline.
+
+Download the trace after the round finishes. Run `npm run score -- path/to/trace.json` for communication v2 metrics and per-call CSV. The [trace guide](web/src/trace/README.md) defines the observations, denominators, unsupported claims and legacy compatibility.
 
 ## Voice pipeline and ownership
 

@@ -62,6 +62,8 @@ export type Sighting = z.infer<typeof SightingSchema>;
 
 export const BrimEventSchema = z.strictObject({
   t: z.number(), kind: z.enum(['saw', 'decided', 'said', 'did']), detail: z.string(),
+  goalId: z.number().int().positive().optional(),
+  goalStage: z.enum(['started', 'paused', 'resumed', 'completed', 'failed', 'cancelled', 'superseded']).optional(),
   sightingId: z.string().optional(), sighting: SightingSchema.optional(),
   calloutStage: z.enum(['generated', 'scheduled', 'started', 'completed', 'canceled', 'failed', 'skipped']).optional(),
 });

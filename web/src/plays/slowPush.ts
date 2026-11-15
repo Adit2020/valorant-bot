@@ -12,7 +12,7 @@ const controlRoutes: Record<string, Vec[]> = {
 export const slowPush: Play = {
   id: 'slow_push', name: 'Slow Push', carrier: 'sova',
   routes: FAST_PLANT.map(route => ({ ...route, waypoints: controlRoutes[route.id]!,
-    speed: 39, delayTicks: route.id === 'sova' ? 100 : route.delayTicks + 18 })),
+    speed: 39, delayTicks: route.id === 'brim' ? 0 : route.id === 'sova' ? 100 : route.delayTicks + 18 })),
   goals: [{ type: 'hold', target: 'a_short' }, { type: 'move', target: 'a_short' },
     { type: 'hold', target: 'pillar' }, { type: 'plant', target: 'default' }],
   utility: 'Keep all smokes for explicit commands.',

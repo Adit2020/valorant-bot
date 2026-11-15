@@ -5,11 +5,11 @@ import { ROUND_TICKS, Round } from './round.js';
 
 const SMOKES: Action[] = [{ type: 'smoke', target: 'heaven' }, { type: 'smoke', target: 'truck' }];
 
-function play(seed: number, calls: Action[] = []) {
+function play(seed: number, calls: Action[] = [], submitTick = 1) {
   const r = new Round(seed);
   r.selectPlay('fast_plant');
   while (!r.finished) {
-    if (r.tick === 1) for (const c of calls) r.brim.addGoal(c, 'command');
+    if (r.tick === submitTick && !r.brim.inspect().closed) for (const c of calls) r.brim.addGoal(c, 'command');
     r.step();
   }
   return r;
@@ -36,4 +36,14 @@ test('drills have no outcome and keep running to the timer', () => {
   const r = new Round(2026, { liveDrill: true });
   while (!r.finished) { assert.equal(r.outcome, null); r.step(); }
   assert.equal(r.tick, ROUND_TICKS);
+});
+
+test('Fast Plant seed 2026 accepts realistic opening timing and still punishes a late call', () => {
+  for (const tick of [0, 57, 58, 100, 109]) {
+    const round = play(2026, SMOKES, tick);
+    assert.equal(round.outcome, 'win', 'submit at tick ' + tick);
+    assert.equal(round.smokesLeft, 1);
+  }
+  for (const tick of [110, 140]) assert.equal(play(2026, SMOKES, tick).outcome, 'loss');
+  assert.equal(play(2026).tick, 242);
 });

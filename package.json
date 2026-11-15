@@ -15,7 +15,8 @@
     "test": "tsx --test shared/*.test.ts server/*.test.ts web/src/voice/*.test.ts web/src/comms/*.test.ts web/src/map/*.test.ts web/src/sim/*.test.ts web/src/trace/*.test.ts",
     "start:server": "node dist/server/index.js",
     "score": "tsx tools/score.ts",
-    "evidence": "tsx tools/evidence.ts"
+    "evidence": "tsx tools/evidence.ts",
+    "study": "tsx tools/study.ts"
   },
   "dependencies": {
     "express": "^5.1.0",

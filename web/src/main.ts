@@ -5,7 +5,8 @@ import { Conversation } from './voice/conversation.js';
 import { bindPushToTalk } from './voice/controls.js';
 import { startCapture } from './voice/stt.js';
 import { SpeechOutput } from './voice/tts.js';
-import { downloadTrace, type BotKind } from './trace/log.js';
+import { createStudyTrace, downloadTrace, type BotKind } from './trace/log.js';
+import { isEvaluation, participantStatus, parseStudy, PHASES, studyUrl } from './trace/study.js';
 import { MicrophoneLevels } from './voice/audioLevels.js';
 import { Waveform } from './ui/waveform.js';
 import { Subtitles } from './ui/subtitles.js';
@@ -13,8 +14,27 @@ import { mountMapPanel, type Mode } from './ui/mapPanel.js';
 import './styles/theme.css';
 
 const element = <T extends HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
+const query = new URLSearchParams(location.search);
+const study = (() => {
+  try {
+    const config = parseStudy(query);
+    if (config) {
+      const key = `${config.protocol}:${config.dataKind}:${config.participantId}`;
+      const assignment = `${config.condition}:${config.order}`;
+      const previous = localStorage.getItem(key);
+      if (previous && previous !== assignment) throw new Error('This ID already has another group or scenario order in this browser. Restore its original URL or use a new anonymous ID.');
+      localStorage.setItem(key, assignment);
+    }
+    return config;
+  } catch (error) {
+    document.querySelector('main')!.textContent = 'Study configuration error: ' + (error instanceof Error ? error.message : String(error));
+    throw error;
+  }
+})();
+const phase = query.get('phase');
+const blinded = study ? isEvaluation(study) : phase === 'pre' || phase === 'post';
 // Comparison group for the transfer test: ?bot=plain says "Copy." to everything and never pushes back.
-const bot: BotKind = new URLSearchParams(location.search).get('bot') === 'plain' ? 'plain' : 'relai';
+const bot: BotKind = study?.bot ?? (blinded || query.get('bot') === 'plain' ? 'plain' : 'relai');
 const backendStatus = element<HTMLParagraphElement>('#backend-status');
 async function checkBackend(): Promise<void> {
   try {
@@ -27,7 +47,8 @@ async function checkBackend(): Promise<void> {
 }
 void checkBackend();
 
-const speech = new SpeechOutput();
+// Study data stays local: no hosted interpretation, hosted synthesis, or cloud-backed recognition.
+const speech = new SpeechOutput(!!study);
 const mic = new MicrophoneLevels(message => { element('#audio-status').textContent = message; });
 const subtitles = new Subtitles(element('#brim-reply'));
 let previousState = 'idle';
@@ -36,11 +57,13 @@ const talkButton = element<HTMLButtonElement>('#push-to-talk');
 const conversation: Conversation = new Conversation({
   capture: interim => startCapture(interim),
   reply: (text, signal) => mapPanel.phase === 'buy'
-    ? buyReply(text, signal, mapPanel.selectPlay)
+    ? study ? Promise.resolve(line('Press Start round when ready.', 'local')) : buyReply(text, signal, mapPanel.selectPlay)
     : liveReply(mapPanel.round, mapPanel.roundId, mode, text, signal, trace => {
       conversation.records.at(-1)!.command = trace;
       mapPanel.trackCommand(trace);
-    }, undefined, { plain: bot === 'plain' }),
+    }, study ? async () => { throw new Error('Study uses local keyword interpretation.'); } : undefined, { plain: bot === 'plain', evaluation: blinded }),
+  liveClock: () => mapPanel.phase === 'live' && !mapPanel.round.finished
+    ? { roundId: mapPanel.roundId, tick: mapPanel.round.tick } : undefined,
   said: (record) => mapPanel.said(record),
   speak: (...args) => speech.speak(...args),
   stopAudio: () => speech.stop(), unlockAudio: () => speech.unlock(),
@@ -67,7 +90,7 @@ function render() {
   // A failed audio attempt still leaves the received subtitle visible.
   if (state === 'idle' && conversation.records.at(-1)?.status === 'completed') subtitles.finish();
   previousState = state;
-  element('#voice-status').textContent = conversation.message;
+  element('#voice-status').textContent = participantStatus(state, conversation.message, blinded || study?.condition === 'C', conversation.records.at(-1)?.error);
   element('#voice-status').dataset.error = String(conversation.records.at(-1)?.status === 'failed');
   const signature = JSON.stringify(conversation.records);
   if (signature === logSignature) return;
@@ -90,32 +113,86 @@ function render() {
   }));
 }
 const modeButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-mode]')];
-let mode: Mode = 'learn';
+let mode: Mode = study?.mode ?? (blinded ? 'match' : 'learn');
 const mapPanel = mountMapPanel(element('.map-panel'), {
   isTalking: () => conversation.isHolding,
   isBrimSpeaking: () => conversation.state === 'speaking',
   announce: (text, chip) => conversation.announce(line(text, 'round'), chip),
   voice: conversation,
-  bot,
+  bot, blinded, study, records: () => conversation.records,
   toggleMode: () => setMode(mode === 'learn' ? 'match' : 'learn'),
 });
-if (mapPanel.phase === 'buy') conversation.announce(line("What's the call?", 'round'));
+if (blinded || study) {
+  for (const button of modeButtons) button.disabled = true;
+  setMode(mode);
+}
+if (mapPanel.phase === 'buy' && !study) conversation.announce(line("What's the call?", 'round'));
 function setMode(next: Mode) {
-  mode = next;
-  modeButtons.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.mode === next)));
-  mapPanel.setMode(next);
+  mode = study?.mode ?? (blinded ? 'match' : next);
+  modeButtons.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.mode === mode)));
+  mapPanel.setMode(mode);
 }
 modeButtons.forEach(button => button.addEventListener('click', () => setMode(button.dataset.mode === 'match' ? 'match' : 'learn')));
-const unbind = bindPushToTalk(talkButton, conversation);
+const unbind = study ? () => {} : bindPushToTalk(talkButton, conversation);
+if (study) {
+  element('main').classList.add('study-mode');
+  talkButton.disabled = true;
+  talkButton.title = 'Local study uses text to avoid cloud speech recognition.';
+  talkButton.querySelector('span')!.textContent = 'Study: type your call below';
+  element('#voice-status').textContent = 'Local study: use the text box. Hosted speech and interpretation are disabled.';
+}
 element<HTMLFormElement>('#text-form').addEventListener('submit', event => {
   event.preventDefault();
   conversation.submitText(element<HTMLInputElement>('#message').value);
 });
 element('#stop').addEventListener('click', () => conversation.cancel());
-element('#export-trace').addEventListener('click', () => downloadTrace(conversation.records, mapPanel.trace(), bot));
+const sessionId = crypto.randomUUID();
+let startedAt = new Date().toISOString();
+let downloadNumber = 0;
+let studyStarted = false;
+let exportedComplete = false;
+const studyPanel = document.createElement('section');
+studyPanel.id = 'study-panel';
+studyPanel.className = 'round-results';
+const studyStatus = document.createElement('p');
+const next = document.createElement('a');
+if (study) {
+  const label = document.createElement('p');
+  label.textContent = `${study.participantId} · ${study.phase} · ${study.play.replaceAll('_', ' ')} · ${study.mode}`;
+  const instruction = document.createElement('p');
+  instruction.textContent = 'Report enemies you can see and direct your teammate using the text box. This study keeps input local; microphone recognition and hosted services are disabled. Wait until the round ends, then download its trace before continuing.';
+  const start = document.createElement('button');
+  start.id = 'study-start'; start.textContent = 'Start round';
+  start.addEventListener('click', () => {
+    if (!mapPanel.startStudy()) return;
+    startedAt = new Date().toISOString(); studyStarted = true; start.disabled = true;
+    instruction.hidden = true; start.hidden = true;
+    studyStatus.textContent = 'Round running. Download the trace after it finishes.';
+  });
+  const nextPhase = PHASES[PHASES.indexOf(study.phase) + 1];
+  if (nextPhase) { next.href = studyUrl(study, nextPhase); next.textContent = `Continue to ${nextPhase}`; }
+  next.id = 'study-next'; next.hidden = true;
+  studyStatus.id = 'study-status'; studyStatus.textContent = 'Ready. The round starts when you press Start round.';
+  studyPanel.append(label, instruction, start, studyStatus, next);
+  element('main').prepend(studyPanel);
+  window.addEventListener('beforeunload', event => {
+    if (studyStarted && !exportedComplete) { event.preventDefault(); event.returnValue = ''; }
+  });
+}
+element('#export-trace').addEventListener('click', () => {
+  const rounds = mapPanel.trace();
+  const file = study ? createStudyTrace(conversation.records, rounds, study, sessionId, startedAt) : undefined;
+  const filename = downloadTrace(conversation.records, rounds, bot, file, ++downloadNumber);
+  if (study) {
+    exportedComplete = file!.study!.completion === 'complete';
+    studyStatus.textContent = `Download requested: ${filename}. ${exportedComplete ? 'Confirm it is in Downloads before continuing.' : 'INCOMPLETE: finish the round and download again.'}`;
+    next.hidden = !exportedComplete || !next.href;
+    if (exportedComplete && study.phase === 'post') studyStatus.textContent += ' Session finished. Ask the experimenter to check all six files.';
+  }
+});
 window.addEventListener('pagehide', () => { unbind(); mapPanel.dispose(); waveform.dispose(); subtitles.dispose(); mic.dispose(); speech.dispose(); }, { once: true });
 
-if (import.meta.env.DEV) {
+if (import.meta.env.DEV && !study) {
   element('#mic-check').hidden = false;
   const button = element<HTMLButtonElement>('#test-mic');
   const status = element('#mic-status');

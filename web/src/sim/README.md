@@ -8,6 +8,10 @@ Open the main page with `?seed=2026`. The HUD shows the unsigned 32-bit seed; R 
 
 `ui/mapPanel.ts` feeds elapsed milliseconds into `FixedClock`. The clock admits at most 250 ms per frame (five ticks at 1×); longer stalls discard excess time. Paused and hidden time is discarded. Learn uses half speed only for the interval that `Conversation.isHolding` is true. Input changes settle the previous interval before switching rate. Rendering interpolates friendly movement; enemies use current visible positions. Designer view may interpolate everyone. Voice and waveform keep their original wall clock.
 
+### Fast Plant opening
+
+Raze and Brim stage for the first 80 live ticks (4.00 seconds). Sova and the Showers group follow their usual schedules. Combat, queued commands, smoke flight and the round clock run throughout. Planned staging does not trigger stuck recovery. On seed 2026 in Match, “Smoke Heaven and Truck” submitted through 5.45 s plants and wins at 40.00 s. At 5.50 s the call loses. Silence spends no charges and loses at 12.10 s. The previous cutoff was 2.85 s and silence lost at 10.20 s.
+
 ## Agents and combat
 
 The selected [play definition](../plays/README.md) supplies spawns, routes, speeds, departure times, final holds and Brim’s recovery route. Only the other attackers start with scripted movement. Friendly agents queue when a move would bring them within 18 units. Agents use A* on the eroded grid; every smoothed leg and every movement step must cross only open cells. Invalid routes return empty and the agent holds. Sova's spawn moved from (372,680) to (366,677) to fit that margin.

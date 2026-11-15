@@ -52,3 +52,20 @@ footer{margin-top:6px}
 @media(max-width:600px){.hud-tag{display:block;margin-left:0}.play-chips button{padding:9px}#buy-plays{flex-wrap:wrap;gap:8px}.voice-stage{min-height:0}#waveform{height:85px}.captions{min-height:82px}}
 
 .map-panel:has(#buy-plays:not([hidden])){--map-chrome:138px}
+
+#entry-hint{margin:0;padding:8px 16px;text-align:center;color:#bdbdc2;font-size:12px;line-height:1.5}
+.round-results{margin:24px 56px;padding:28px;border:1px solid #303034;background:#0b0b0d;border-radius:10px;overflow-wrap:anywhere}.round-results[hidden]{display:none}.round-results h2{font-size:30px;margin:6px 0}.round-results h3{font-size:16px;margin:28px 0 12px}.round-results h4{font-size:14px;margin:0 0 10px}.round-results p{font-size:13px;line-height:1.6;margin:6px 0}.results-eyebrow{color:#7fe7ff;letter-spacing:.14em;font-size:10px!important}.results-reason{color:#e6ab85}.results-stats,.results-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-top:18px}.results-stats div,.results-metrics div{padding:12px;background:#151518;border-radius:6px;font-size:12px}.results-stats span,.results-stats strong{display:block}.results-stats span,.results-muted{color:#aaa}.results-stats strong{margin-top:6px;text-transform:capitalize}.result-call{border-top:1px solid #303034;padding:16px 0}.result-goal{border-left:2px solid #b78050;padding-left:12px;margin:10px 0}.results-trace{max-height:360px;overflow:auto;padding-left:22px;font-size:12px;line-height:1.6}.results-trace li{padding:4px}.round-results summary{color:#cfcfcf}@media(max-width:600px){.round-results{margin:16px;padding:20px}.results-stats,.results-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Keep the live map and typed study calls together on a collection laptop. */
+.study-mode{--stage-h:300px}
+.study-mode .map-panel{--map-chrome:150px}
+.study-mode #study-panel{margin:12px 56px;padding:12px 18px}
+.study-mode .voice-stage{min-height:220px;padding:12px 56px}
+.study-mode #waveform{height:24px}
+.study-mode .captions{min-height:55px}
+.study-mode #push-to-talk{display:none}
+.study-mode footer{margin-top:6px}
+@media(max-width:600px){
+  .study-mode #study-panel{margin:12px 16px}
+  .study-mode .voice-stage{padding:12px 22px}
+}

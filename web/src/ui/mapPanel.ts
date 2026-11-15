@@ -9,6 +9,8 @@ import { DT, FixedClock, timeScale, type Mode } from '../sim/loop.js';
 import { defaultPlay, plays } from '../plays/index.js';
 import { isTypingTarget } from '../voice/controls.js';
 import type { Conversation } from '../voice/conversation.js';
+import { renderResults } from './results.js';
+import { hideStudyResults, type StudyConfig } from '../trace/study.js';
 
 export type { Mode } from '../sim/loop.js';
 
@@ -23,6 +25,9 @@ export interface MapPanelHooks {
   voice: Pick<Conversation, 'state' | 'activeCallout' | 'tryCallout' | 'cancel'>;
   /** Which teammate brain answers calls. 'plain' labels the HUD so session screenshots self-identify. */
   bot?: BotKind;
+  blinded?: boolean;
+  study?: StudyConfig;
+  records(): ConversationRecord[];
 }
 
 export interface MapPanel {
@@ -33,6 +38,7 @@ export interface MapPanel {
   said(record: ConversationRecord): void;
   trace(): RoundTrace[];
   selectPlay(id: PlayId): boolean;
+  startStudy(): boolean;
   readonly brim: Round['brim'];
   setMode(mode: Mode): void;
   syncVoice(): void;
@@ -60,18 +66,26 @@ export function mountMapPanel(root: HTMLElement, hooks: MapPanelHooks): MapPanel
   };
 
   const query = new URLSearchParams(location.search);
+  const blinded = hooks.blinded;
+  const study = hooks.study;
+  if (blinded || study) {
+    designer.checked = false;
+    designer.disabled = true;
+  }
+  const entryHint = $('#entry-hint');
+  let designerExposed = designer.checked;
   const param = query.get('seed');
-  const lab = import.meta.env.DEV && query.get('agentLab');
+  const lab = !study && !blinded && import.meta.env.DEV && query.get('agentLab');
   const practice = lab === 'practice';
   const calloutDrill = lab === 'sighting' || lab === 'multiple' || lab === 'cover' ? lab : undefined;
-  const round = new Round(param && /^\d{1,10}$/.test(param) ? Number(param) : 2026, { practice, liveDrill: lab === 'live', calloutDrill });
+  const round = new Round(study?.seed ?? (param && /^\d{1,10}$/.test(param) ? Number(param) : 2026), { practice, liveDrill: lab === 'live', calloutDrill });
   const status = $('#command-status');
   let command: CommandTrace | undefined;
   let roundId = 1;
   const archive: RoundTrace[] = [];
   const dialogue: BrimEvent[] = [];
   const roundTrace = (end: RoundTrace['end']): RoundTrace => ({
-    roundId, seed: round.seed, end, events: [...round.brim.events(), ...round.callouts.events(), ...dialogue].sort((a,b) => a.t - b.t),
+    roundId, seed: round.seed, end, play: round.play, mode, completion: round.result ? 'complete' : end === 'restart' ? 'aborted' : 'incomplete', result: round.result, evaluation: round.evaluationTrace(end), designerExposed, events: [...round.brim.events(), ...round.callouts.events(), ...dialogue].sort((a,b) => a.t - b.t),
   });
   const tag = $('.hud-tag');
   const choices = $('#buy-plays');
@@ -82,8 +96,10 @@ export function mountMapPanel(root: HTMLElement, hooks: MapPanelHooks): MapPanel
   const listeners = new AbortController();
   const on = { signal: listeners.signal };
 
+  const results = document.querySelector<HTMLElement>('#round-results')!;
+  let resultsShown = false;
   let playing = true;
-  let mode: Mode = 'learn';
+  let mode: Mode = study?.mode ?? (blinded ? 'match' : 'learn');
   let scale = timeScale(mode, hooks.isTalking());
   let lastFrame = performance.now();
   let frame = 0;
@@ -98,16 +114,21 @@ export function mountMapPanel(root: HTMLElement, hooks: MapPanelHooks): MapPanel
 
   function showPhase() {
     const buying = round.phase === 'buy';
-    choices.hidden = !buying;
+    choices.hidden = !buying || !!study;
+    const fastPlant = buying || round.play === 'fast_plant';
+    const showHint = !blinded && study?.condition !== 'C' && fastPlant && !lab && mode === 'learn' && (buying || round.tick <= 110);
+    entryHint.hidden = !showHint;
+    set(entryHint, showHint ? 'Fast Plant · ' + plays.fast_plant.utility : '');
     const name = round.play ? plays[round.play].name : practice ? 'Plant drill' : 'Live drill';
     // Plain bot sessions label themselves for screenshots (TONIGHT.md Task 1).
-    set(tag, hooks.bot === 'plain' ? 'Plain bot · Seed ' + round.seed : (buying ? '' : name + ' · ') + 'Seed ' + round.seed);
+    set(tag, blinded ? 'Evaluation · Seed ' + round.seed : hooks.bot === 'plain' ? 'Plain bot · Seed ' + round.seed : (buying ? '' : name + ' · ') + 'Seed ' + round.seed);
     const result = round.outcome === 'win' ? 'Round won' : round.outcome === 'loss' ? 'Round lost' : 'Finished';
     set(hud.timerKey, buying ? 'Buy phase' : round.finished ? result : 'Live');
     set(hud.timer, clock(buying ? round.buyRemainingMs / 1000 : ROUND_TICKS * DT - round.time));
   }
 
   function selectPlay(id: PlayId) {
+    if (study && id !== study.play) return false;
     advance(performance.now()); // settle the deadline even between animation frames
     if (!round.selectPlay(id)) return false;
     showPhase();
@@ -131,6 +152,7 @@ export function mountMapPanel(root: HTMLElement, hooks: MapPanelHooks): MapPanel
     playButton.setAttribute('aria-pressed', String(!playing));
   }
   function restart() {
+    if (study) return;
     // Canceling a held microphone renders the new voice state and settles the Learn clock.
     // Freeze the departing round before that callback can advance or schedule another turn.
     playing = false;
@@ -144,6 +166,10 @@ export function mountMapPanel(root: HTMLElement, hooks: MapPanelHooks): MapPanel
     dialogue.length = 0;
     set(status, '');
     round.reset();
+    resultsShown = false;
+    results.hidden = true;
+    results.replaceChildren();
+    designerExposed = designer.checked;
     fixed.reset();
     setPlaying(true);
     showPhase();
@@ -168,14 +194,18 @@ export function mountMapPanel(root: HTMLElement, hooks: MapPanelHooks): MapPanel
     listeners.signal.addEventListener('abort', () => { Reflect.deleteProperty(window, 'brim'); });
   }
   function togglePlay() {
+    if (study) return;
     if (round.finished) restart();
     else { advance(performance.now()); setPlaying(!playing); }
   }
   function toggleDesigner() {
+    if (blinded || study) return;
     designer.checked = !designer.checked;
     applyDesigner();
   }
   function applyDesigner() {
+    if (blinded || study) designer.checked = false;
+    if (designer.checked) designerExposed = true;
     map.clearEffects();
     for (const e of effects) if (e.public || designer.checked) map.spawnEffect(e.effect, e.tick * DT);
     map.setOptions({ designerView: designer.checked });
@@ -244,7 +274,13 @@ export function mountMapPanel(root: HTMLElement, hooks: MapPanelHooks): MapPanel
       }
       serviceCallouts();
     });
-    if (round.finished) setPlaying(false);
+    if (round.finished) {
+      setPlaying(false);
+      if (!resultsShown) {
+        resultsShown = true;
+        renderResults(results, roundTrace('current'), hooks.records(), !!blinded || !!study && hideStudyResults(study));
+      }
+    }
   }
 
   // Settle the old rate up to the input timestamp, even between two animation frames.
@@ -263,9 +299,11 @@ export function mountMapPanel(root: HTMLElement, hooks: MapPanelHooks): MapPanel
   }, on);
 
   function commandStatus() {
+    if (blinded || study?.condition === 'C') return '';
     if (round.brim.recovering) return 'Falling back to plan';
     if (!command || command.thinkMs === undefined) return '';
     if (!command.validator.ok) return command.feedback ?? 'Command failed';
+    if (command.report) return 'Report received';
     if (!command.goalIds.length) return 'Continuing current order';
     const states = command.goalIds.map(id => round.brim.goalStatus(id));
     if (states.includes('failed') || states.includes('cancelled')) return 'Command failed';
@@ -291,11 +329,20 @@ export function mountMapPanel(root: HTMLElement, hooks: MapPanelHooks): MapPanel
     map.render(state, round.time + (round.finished ? 0 : fixed.alpha * DT));
   }
   showPhase();
-  setPlaying(true);
+  setPlaying(!study);
+  if (study) {
+    playButton.disabled = true;
+    $('#map-restart').setAttribute('disabled', '');
+  }
   frame = requestAnimationFrame(tick);
 
   return {
     selectPlay, round, get roundId() { return roundId; },
+    startStudy() {
+      if (!study || !selectPlay(study.play)) return false;
+      setPlaying(true);
+      return true;
+    },
     trackCommand(trace) { command = trace; },
     said(record) {
       if (record.response) dialogue.push({ t: round.time, kind: 'said', detail: 'Turn ' + record.id + ': ' + record.response.reply });
@@ -303,7 +350,7 @@ export function mountMapPanel(root: HTMLElement, hooks: MapPanelHooks): MapPanel
     trace() { return [...archive, roundTrace('current')]; },
     get phase() { return round.phase; },
     get brim() { return round.brim; },
-    setMode(next) { mode = next; syncRate(); },
+    setMode(next) { mode = study?.mode ?? (blinded ? 'match' : next); syncRate(); showPhase(); },
     syncVoice: syncRate,
     dispose() {
       cancelAnimationFrame(frame);

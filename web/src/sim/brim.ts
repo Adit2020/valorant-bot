@@ -39,6 +39,7 @@ interface Goal {
 }
 export interface BrimFrame {
   tick: number; pos: Vec; contacts: AgentView[]; carrier?: string;
+  moveAfterTick?: number;
   route(goals: Vec[]): boolean;
   watch(point: Vec): void;
   deploy(kind: 'smoke' | 'molly', target: RegionId): string | undefined;
@@ -80,8 +81,8 @@ export class BrimController {
       knownEnemies: Object.fromEntries(this.known), closed: this.closed });
   }
   events(): BrimEvent[] { return this.log.map(e => ({ ...e })); }
-  private emit(tick: number, kind: BrimEvent['kind'], detail: string) {
-    this.log.push({ t: tick * DT, kind, detail });
+  private emit(tick: number, kind: BrimEvent['kind'], detail: string, goalId?: number, goalStage?: BrimEvent['goalStage']) {
+    this.log.push({ t: tick * DT, kind, detail, goalId, goalStage });
   }
   private enter(f: BrimFrame, next: State) {
     if (this.state !== next) this.emit(f.tick, 'decided', 'state: ' + next);
@@ -96,7 +97,7 @@ export class BrimController {
     if (this.closed) return;
     for (const g of this.pending()) {
       g.status = 'cancelled'; g.reason = reason;
-      this.emit(f.tick, 'decided', '#' + g.id + ' cancelled: ' + reason);
+      this.emit(f.tick, 'decided', '#' + g.id + ' cancelled: ' + reason, g.id, 'cancelled');
     }
     for (const k of this.known.values()) k.visible = false;
     this.release(f); this.state = 'hold'; this.closed = true;
@@ -127,7 +128,7 @@ export class BrimController {
   private finish(f: BrimFrame, ok: boolean, detail: string) {
     const g = this.active!;
     g.status = ok ? 'done' : 'failed'; g.reason = detail;
-    this.emit(f.tick, ok ? 'did' : 'decided', '#' + g.id + (ok ? ' ' : ' rejected: ') + detail);
+    this.emit(f.tick, ok ? 'did' : 'decided', '#' + g.id + (ok ? ' ' : ' rejected: ') + detail, g.id, ok ? 'completed' : 'failed');
     this.release(f);
     this.failures = ok ? 0 : this.failures + 1;
     if (!ok && !g.recovery && (this.failures >= 2 || detail === 'no movement progress' || !this.pending().length)) {
@@ -146,7 +147,7 @@ export class BrimController {
     if (dist(f.pos, to) < 0.001) return true;
     if (!this.leg) {
       if (!f.route(via)) { this.finish(f, false, 'unreachable destination'); return false; }
-      this.leg = { to, lastPos: f.pos, movedAt: f.tick };
+      this.leg = { to, lastPos: f.pos, movedAt: Math.max(f.tick, f.moveAfterTick ?? 0) };
     } else if (dist(f.pos, this.leg.lastPos) > 0.001) {
       this.leg.lastPos = f.pos; this.leg.movedAt = f.tick;
     } else if (f.tick - this.leg.movedAt >= STALL_TICKS) {
@@ -171,7 +172,7 @@ export class BrimController {
     if (next !== this.active) {
       if (this.active) {
         this.active.status = 'paused';
-        this.emit(f.tick, 'decided', '#' + this.active.id + ' paused for #' + next.id);
+        this.emit(f.tick, 'decided', '#' + this.active.id + ' paused for #' + next.id, this.active.id, 'paused');
         this.release(f);
       }
       const resumed = next.status === 'paused';
@@ -179,7 +180,7 @@ export class BrimController {
       // Planting must be uninterrupted. A finite hold retains time already served.
       if (next.action.type === 'plant') next.elapsed = 0;
       this.emit(f.tick, 'decided', '#' + next.id + (resumed ? ' resume ' : ' start ') +
-        next.action.type + ('target' in next.action ? ' ' + next.action.target : ''));
+        next.action.type + ('target' in next.action ? ' ' + next.action.target : ''), next.id, resumed ? 'resumed' : 'started');
       if (!ActionSchema.safeParse(next.action).success) { this.finish(f, false, 'invalid action or target'); return; }
     }
     const a = next.action;
@@ -220,7 +221,7 @@ export class BrimController {
         const carrying = f.carrier === 'brim';
         const to = carrying ? spot : plantCover[a.target];
         if (!carrying && !this.leg && !next.elapsed)
-          this.emit(f.tick, 'decided', '#' + next.id + ' cover ' + f.carrier + ' at ' + a.target);
+          this.emit(f.tick, 'decided', '#' + next.id + ' cover ' + f.carrier + ' at ' + a.target, next.id);
         if (dist(f.pos, to) >= 0.001) {
           this.enter(f, 'move'); this.arrive(f, to); return;
         }
@@ -231,7 +232,7 @@ export class BrimController {
         }
         if (!inPlantZone(...f.pos)) { this.finish(f, false, 'outside plant zone'); return; }
         this.enter(f, 'plant');
-        if (!next.elapsed) this.emit(f.tick, 'did', '#' + next.id + ' planting ' + a.target);
+        if (!next.elapsed) this.emit(f.tick, 'did', '#' + next.id + ' planting ' + a.target, next.id);
         f.plant(next.elapsed / PLANT_TICKS);
         if (next.elapsed++ === PLANT_TICKS) this.finish(f, true, 'planted ' + a.target);
         return;

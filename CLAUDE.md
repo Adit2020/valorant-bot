@@ -80,11 +80,14 @@ TypeScript everywhere (strict + `noUncheckedIndexedAccess`; relative imports use
 - [x] Step 2: map module mounted below the voice stage with the HUD strip (timer · smokes · spike · mode). Stage shrinks to ~35vh on screens ≤ 1200 px tall so stage + map fit one viewport. Brim's icon pulses while his real TTS plays.
 - [x] Step 3: live 20 Hz simulation, seeded fast plant, visibility, combat and Learn slowdown. The other attackers remain scripted.
 - [x] Step 4: autonomous Brim, goal queue, perception, utility, planting/cover and recovery. See `web/src/sim/README.md` for the live console demos and goal API.
-- [ ] Steps 5–10: see `PLAN.md`. **Never cut** call scoring + the transfer test, or the Step 6 failure handling.
+- [x] Steps 5–8: buy-phase plays, live keyword/LLM command routing, validation, grounded automatic callouts, round outcomes/results, trace v3 and communication scorer v2.
+- [x] Step 9a infrastructure: anonymous six-round **typed** study, common evaluation bot, held-out A/B scenarios and audited paired analysis. See `docs/STUDY.md`; this is not evidence of human or spoken transfer.
+- [ ] Real microphone/speaker preflight and real participant collection remain team checks. Hosted provider measurements require credentials; no human results have been collected by the agent.
+- Demo/release instructions: `docs/DEMO.md`. Step 7b and submission-material creation remain outside this work. **Never cut** call scoring + the transfer test, or the Step 6 failure handling.
 
 ## Commands
 ```bash
-npm install && npm run dev       # API on 127.0.0.1:3001 + web on http://127.0.0.1:5173 (sandbox: /sandbox.html)
+npm run dev                      # API on 127.0.0.1:3001 + web on http://127.0.0.1:5184 (sandbox: /sandbox.html)
 npm run typecheck                # web, server, shared, tests
 npm test                         # contracts, API, voice, map data (bindA.test.ts), test round (testScene.test.ts)
 npm run build

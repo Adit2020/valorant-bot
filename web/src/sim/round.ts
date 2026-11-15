@@ -13,6 +13,7 @@ import { resolveCombat } from './combat.js';
 import { DT } from './loop.js';
 import { mulberry32 } from './rng.js';
 import { perceive, publiclySeen } from './visibility.js';
+import { EvaluationRecorder } from '../trace/evaluation.js';
 
 export function smokeSpot(target: RegionId) {
   const spot = target === 'truck' ? SMOKE_TARGETS.truck_triple_gap :
@@ -50,6 +51,7 @@ export class Round {
   get smokesLeft() { return this.smokes; }
   get mollyLeft() { return this.mollies; }
   get brim(): Pick<BrimController, 'addGoal' | 'cancelGoal' | 'clearGoals' | 'inspect' | 'events' | 'goalStatus' | 'recovering'> { return this.controller; }
+  private evaluation = new EvaluationRecorder();
   private agents;
   private clouds: Smoke[] = [];
   private fires: { region: RegionId; starts: number; ends: number }[] = [];
@@ -60,6 +62,7 @@ export class Round {
     this.seed = seed >>> 0;
     this.agents = this.setup();
     this.sight = perceive(this.agents, []);
+    if (this.phase === 'live') this.evaluation.observe(0, this.agents, this.sight);
   }
   private setup() {
     const roster = createAgents(mulberry32(this.seed));
@@ -86,6 +89,7 @@ export class Round {
     this.controller = controller;
     this.sight = perceive(roster, []);
     this.selected = id;
+    this.evaluation.observe(0, roster, this.sight);
     this.remaining = 0;
     return true;
   }
@@ -100,18 +104,35 @@ export class Round {
    * Only rounds with a chosen play have an outcome; drills and the buy phase do not.
    * Defenders wiped → win. Attackers wiped → loss (they defuse). At time: planted → win, else loss.
    */
-  get outcome(): Outcome | null {
+  private get endReason(): 'defender_wipe' | 'attacker_wipe' | 'timeout' | null {
     if (this.selected === null) return null;
     const alive = (team: AgentView['team']) => this.agents.some(a => a.team === team && a.alive);
-    if (!alive('def')) return 'win';
-    if (!alive('atk')) return 'loss';
-    if (this.tick >= ROUND_TICKS) return this.spike.state === 'planted' ? 'win' : 'loss';
+    if (!alive('def')) return 'defender_wipe';
+    if (!alive('atk')) return 'attacker_wipe';
+    if (this.tick >= ROUND_TICKS) return 'timeout';
     return null;
+  }
+  get outcome(): Outcome | null {
+    switch (this.endReason) {
+      case 'defender_wipe': return 'win';
+      case 'attacker_wipe': return 'loss';
+      case 'timeout': return this.spike.state === 'planted' ? 'win' : 'loss';
+      default: return null;
+    }
+  }
+  // Only terminal aggregates leave the simulation here, including for timed lab drills.
+  get result() {
+    if (!this.finished) return undefined;
+    const remaining = (team: AgentView['team']) => this.agents.filter(a => a.team === team && a.alive).length;
+    return { outcome: this.outcome, reason: this.endReason ?? 'timeout' as const, play: this.play,
+      duration: this.time, attackers: remaining('atk'), defenders: remaining('def'),
+      spike: this.spike.state, smokes: this.smokesLeft, mollies: this.mollyLeft };
   }
   get finished() { return this.tick >= ROUND_TICKS || this.outcome !== null; }
   reset(seed = this.seed) {
     this.seed = seed >>> 0;
     this.tick = 0;
+    this.evaluation = new EvaluationRecorder();
     this.generator = new CalloutGenerator();
     this.remaining = BUY_MS;
     this.selected = null;
@@ -122,6 +143,7 @@ export class Round {
     this.spike = { state: 'carried' };
     this.agents = this.setup();
     this.sight = perceive(this.agents, []);
+    if (this.phase === 'live') this.evaluation.observe(0, this.agents, this.sight);
   }
   assignRoute(id: string, goals: Vec[]) {
     const agent = this.agents.find(a => a.id === id && a.alive);
@@ -166,7 +188,7 @@ export class Round {
     const smokes = this.activeSmokes();
     this.sight = perceive(this.agents, smokes);
     const frame: BrimFrame = {
-      tick: this.tick, pos: position(brim), contacts: this.observations('brim'),
+      tick: this.tick, moveAfterTick: brim.delayTicks, pos: position(brim), contacts: this.observations('brim'),
       carrier: this.agents.find(a => a.team === 'atk' && a.alive && a.hasSpike)?.id,
       route: goals => assignRoute(brim, goals),
       watch: at => { brim.watch = at; },
@@ -196,6 +218,7 @@ export class Round {
     this.burn(brim, events);
     if (this.selected) { this.recoverSpike(); this.plantWithCarrier(); }
     this.sight = perceive(this.agents, smokes);
+    this.evaluation.observe(this.tick, this.agents, this.sight);
     this.generator.observe(this.tick, brim.alive && !this.finished ? this.observations('brim') : []);
     if (!brim.alive || this.finished) this.controller.close(frame, brim.alive ? 'round ended' : 'RelAI died');
     return events;
@@ -256,9 +279,14 @@ export class Round {
     return { id, tag, team, role, facing, hp, alive, isBrim, hasSpike,
       x: a.previous[0] + (a.x - a.previous[0]) * alpha, y: a.previous[1] + (a.y - a.previous[1]) * alpha };
   }
+  // The trace exporter may release privileged evidence only for a closed or departing round.
+  evaluationTrace(end: 'current' | 'restart') {
+    if (this.phase === 'live' && (this.finished || end === 'restart')) return this.evaluation.export();
+  }
+
   snapshot(designer = false, alpha = 1): MapState {
     return { spike: { ...this.spike }, agents: this.agents
-      .filter(a => designer || a.team === 'atk' || publiclySeen(this.sight, a.id))
+      .filter(a => designer || a.team === 'atk' || (this.phase === 'live' && publiclySeen(this.sight, a.id)))
       // Never interpolate a newly visible enemy back to a previously hidden location.
       .map(a => this.view(a, a.alive && (designer || a.team === 'atk') ? alpha : 1)) };
   }

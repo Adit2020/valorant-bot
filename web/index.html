@@ -16,9 +16,11 @@
     <span>Call your play</span>
     <div class="play-chips"></div>
   </div>
+  <p id="entry-hint" hidden></p>
   <div class="map-wrap"><canvas id="map" role="img" aria-label="Top-down map of Bind A with allies, observed defenders, utility and the spike"></canvas></div>
   <div class="map-controls"><button id="map-play" class="quiet" type="button" aria-keyshortcuts="P" aria-pressed="false">Pause</button><button id="map-restart" class="quiet" type="button" aria-keyshortcuts="R">Restart</button><label><input id="map-labels" type="checkbox" checked/> Callouts</label><label><input id="map-designer" type="checkbox" aria-keyshortcuts="D"/> Designer view</label><span class="map-keys"><kbd>P</kbd> play <kbd>R</kbd> restart <kbd>L</kbd> Learn/Match <kbd>D</kbd> designer</span></div>
 </section>
+<section id="round-results" class="round-results" aria-label="Round results" aria-live="polite" hidden></section>
 <section class="history"><div class="history-heading"><details id="history"><summary>Conversation history <span id="turn-count">0</span></summary><ol id="chat-log"></ol></details><button id="export-trace" class="quiet" type="button">Download trace</button></div></section>
 <details id="mic-check" hidden><summary>Development tools</summary><button id="test-mic" type="button">Test microphone permission</button><p id="mic-status" role="status">Permission check only. Tracks stop immediately.</p></details>
 </main><script type="module" src="/src/main.ts"></script></body></html>

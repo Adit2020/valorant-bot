@@ -59,7 +59,7 @@ export class SpeechOutput {
     };
   }
 
-  constructor() { this.audio.preload = 'auto'; }
+  constructor(private readonly localOnly = false) { this.audio.preload = 'auto'; }
 
   unlock() {
     // Create/resume in the user's gesture. One media source per audio element.
@@ -100,6 +100,10 @@ export class SpeechOutput {
       this.visualMode = mode; this.startedAt = performance.now(); started(mode);
     };
     try {
+      if (this.localOnly) {
+        await this.browser(text, signal, visualStarted);
+        return;
+      }
       await withSpeechFallback(
         () => this.hosted(text, signal, visualStarted, notice),
         () => this.browser(text, signal, visualStarted), signal, notice, () => playbackStarted,
@@ -206,7 +210,8 @@ export class SpeechOutput {
       if (signal.aborted) { reject(signal.reason); return; }
       const utterance = new SpeechSynthesisUtterance(spoken(text));
       utterance.lang = 'en-US';
-      const voice = synth.getVoices().find(voice => voice.lang.startsWith('en'));
+      const voice = synth.getVoices().find(voice => voice.lang.startsWith('en') && (!this.localOnly || voice.localService));
+      if (this.localOnly && !voice) { reject(new Error('No local English voice available. Read the teammate subtitle.')); return; }
       if (voice) utterance.voice = voice;
       const cleanup = () => {
         utterance.onstart = utterance.onend = utterance.onerror = utterance.onboundary = null;

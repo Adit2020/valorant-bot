@@ -13,6 +13,7 @@ export interface ConversationDependencies {
   said?(record: ConversationRecord): void;
   stopAudio(): void;
   unlockAudio(): void;
+  liveClock?(): ConversationRecord['speechRelease'];
   now(): number;
   update(): void;
 }
@@ -106,6 +107,7 @@ export class Conversation {
     this.releasedAt = this.deps.now();
     this.message = 'Finishing transcript…';
     this.changed();
+    if (this.current) this.current.speechRelease = this.deps.liveClock?.();
     this.capture?.stop();
     if (this.recognitionResult) this.finishRecognition(this.generation, this.current!);
   }
@@ -179,7 +181,7 @@ export class Conversation {
   }
 
   private async deliver(id: number, record: ConversationRecord, result: ReplyResult, speechEnd: number, signal: AbortSignal) {
-    const label = record.callout ? 'Enemy sighting' : record.command ? (record.command.validator.ok ? 'Command accepted' : 'Command failed') : { local: 'Local fallback', openai: 'OpenAI', keyword: 'Play call', round: 'Round' }[result.source];
+    const label = record.callout ? 'Enemy sighting' : record.command?.report ? (record.command.validator.ok ? 'Report received' : 'Report unresolved') : record.command ? (record.command.validator.ok ? 'Command accepted' : 'Command failed') : { local: 'Local fallback', openai: 'OpenAI', keyword: 'Play call', round: 'Round' }[result.source];
     record.response = this.response = result.response;
     record.source = result.source;
     this.message = `${label} reply. Preparing speech…`;

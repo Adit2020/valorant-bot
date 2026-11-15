@@ -1,4 +1,9 @@
-import type { BrimEvent, BrimResponse, TurnLog } from '../../../shared/schema.js';
+import type { BrimEvent, BrimResponse, PlayId, TurnLog } from '../../../shared/schema.js';
+
+import type { Round } from '../sim/round.js';
+import type { Evaluation } from './evaluation.js';
+import type { StudyConfig } from './study.js';
+import type { Mode } from '../sim/loop.js';
 
 export type ConversationState = 'idle' | 'listening' | 'thinking' | 'speaking';
 export interface CommandTrace {
@@ -7,6 +12,8 @@ export interface CommandTrace {
   path: TurnLog['path'];
   goalIds: number[];
   validator: TurnLog['validator'];
+  inPlay?: boolean;
+  report?: boolean;
   interpretation?: BrimResponse;
   decision?: string;
   feedback?: string;
@@ -20,6 +27,12 @@ export interface RoundTrace {
   seed: number;
   events: BrimEvent[];
   end: 'restart' | 'current';
+  result?: NonNullable<Round['result']>;
+  evaluation?: Evaluation;
+  designerExposed?: boolean;
+  play?: PlayId | null;
+  mode?: Mode;
+  completion?: 'complete' | 'incomplete' | 'aborted';
 }
 export interface ConversationRecord {
   id: number;
@@ -35,6 +48,8 @@ export interface ConversationRecord {
   notices: string[];
   turnLog?: TurnLog;
   command?: CommandTrace;
+  buyCall?: { roundId: number; play?: PlayId };
+  speechRelease?: { roundId: number; tick: number };
   callout?: { roundId: number; sightingId: string };
 }
 
@@ -51,15 +66,45 @@ export function attachTurnLog(record: ConversationRecord): void {
 }
 
 export type BotKind = 'relai' | 'plain';
-export interface TraceFile { version: 2; scope: 'gameplay'; bot?: BotKind; records: ConversationRecord[]; rounds: RoundTrace[] }
+export interface StudySession extends StudyConfig {
+  sessionId: string;
+  startedAt: string;
+  exportedAt: string;
+  completion: 'complete' | 'incomplete' | 'aborted';
+}
+export interface TraceFile { version: 2 | 3; scope: 'gameplay'; bot?: BotKind; study?: StudySession; records: ConversationRecord[]; rounds: RoundTrace[] }
 
-export function downloadTrace(records: ConversationRecord[], rounds: RoundTrace[], bot: BotKind = 'relai'): void {
-  const file: TraceFile = { version: 2, scope: 'gameplay', bot, records, rounds };
+export function traceFilename(file: TraceFile, downloadNumber = 1): string {
+  if (file.study) {
+    const s = file.study;
+    return `${s.participantId}-${s.condition}-${s.phase}--${s.sessionId}--${downloadNumber}.json`;
+  }
+  return `relai-trace-${file.bot ?? 'relai'}-seed${file.rounds.at(-1)?.seed ?? 'unknown'}.json`;
+}
+
+export function createStudyTrace(records: ConversationRecord[], rounds: RoundTrace[], config: StudyConfig,
+  sessionId: string, startedAt: string, exportedAt = new Date().toISOString()): TraceFile {
+  const round = rounds.at(-1);
+  if (!round) throw new Error('No round to export.');
+  const completion = round.result ? 'complete' : round.end === 'restart' ? 'aborted' : 'incomplete';
+  return { version: 3, scope: 'gameplay', bot: config.bot,
+    study: { ...config, sessionId, startedAt, exportedAt, completion },
+    // Exactly one study round per file; restarts in ordinary gameplay remain compatible.
+    rounds: [{ ...round, completion }],
+    records: records.filter(r => {
+      const id = r.command?.roundId ?? r.buyCall?.roundId ?? r.callout?.roundId ?? r.speechRelease?.roundId;
+      return id === undefined || id === round.roundId;
+    }) };
+}
+
+export function downloadTrace(records: ConversationRecord[], rounds: RoundTrace[], bot: BotKind = 'relai', study?: TraceFile, downloadNumber = 1): string {
+  const file: TraceFile = study ?? { version: 3, scope: 'gameplay', bot, records, rounds };
   const blob = new Blob([JSON.stringify(file, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `relai-trace-${bot}-seed${rounds.at(-1)?.seed ?? 'unknown'}.json`;
+  link.download = traceFilename(file, downloadNumber);
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return link.download;
 }

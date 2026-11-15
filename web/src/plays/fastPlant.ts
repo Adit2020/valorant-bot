@@ -9,7 +9,7 @@ export interface Route {
 const { short, showers } = ATTACKER_STARTS;
 // Distinct lanes, departure times and final holds keep the two groups spaced apart.
 export const FAST_PLANT: Route[] = [
-  { id: 'brim', tag: 'RELAI', role: 'C', start: short[0]!, speed: 61, delayTicks: 10,
+  { id: 'brim', tag: 'RELAI', role: 'C', start: short[0]!, speed: 61, delayTicks: 0,
     waypoints: [[375, 492], [485, 470], [585, 386]], watch: [565, 220] },
   { id: 'raze', tag: 'RAZ', role: 'D', start: short[1]!, speed: 81, delayTicks: 0,
     waypoints: [[380, 452], [487, 402], [560, 275]], watch: [650, 180] },
@@ -33,10 +33,12 @@ export interface Play {
 }
 
 export const fastPlant: Play = {
-  id: 'fast_plant', name: 'Fast Plant', routes: FAST_PLANT, carrier: 'sova',
+  id: 'fast_plant', name: 'Fast Plant', carrier: 'sova',
+  // Stage the Short entry pair while the spike and Showers group start their approach.
+  routes: FAST_PLANT.map(r => r.id === 'brim' || r.id === 'raze' ? { ...r, delayTicks: 80 } : r),
   // No automatic utility: RelAI smokes only when the player calls it, so silence loses the round.
   goals: [{ type: 'move', target: 'a_short' }, { type: 'plant', target: 'default' }],
-  utility: 'Call my smokes on entry: Heaven and the Truck gap block the site angles.',
+  utility: 'Say “Smoke Heaven and Truck” before the Short entry pair advances.',
   explanation: 'Three take Short with the spike. Two swing from Showers while RelAI covers Default.',
   confirmation: 'Fast plant. Call my smokes.',
 };

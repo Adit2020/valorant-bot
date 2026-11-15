@@ -2,6 +2,7 @@ import { BrimResponseSchema, LiveResponseSchema, type Action, type BrimResponse,
 import type { Round } from '../sim/round.js';
 import type { CommandTrace } from '../trace/log.js';
 import { classifyLive, type ReplyResult } from './brimClient.js';
+import { classifyCommunication } from './report.js';
 import { matchKeyword, namedTargets, response } from './keywordMatcher.js';
 import { acknowledge, gameState, liveProblem, validateActions, yourCall } from './validator.js';
 
@@ -32,6 +33,8 @@ export function targetsMatchTranscript(transcript: string, actions: readonly Act
 export interface LiveReplyOptions {
   /** Comparison bot: says "Copy." to everything, never pushes back, and enqueues whatever it parsed without validation. */
   plain?: boolean;
+  /** Evaluation uses identical plain mechanics and acknowledgments for either assigned condition. */
+  evaluation?: boolean;
 }
 export const PLAIN_REPLY = 'Copy.';
 
@@ -40,8 +43,8 @@ export async function liveReply(round: Round, roundId: number, mode: GameStateFo
   options: LiveReplyOptions = {}): Promise<ReplyResult> {
   const controller = round.brim;
   const start = performance.now();
-  const plain = !!options.plain;
-  const trace: CommandTrace = { roundId, t: round.time, path: 'keyword', goalIds: [], validator: { ok: false } };
+  const plain = !!options.plain || !!options.evaluation;
+  const trace: CommandTrace = { roundId, t: round.time, inPlay: round.phase === 'live' && !round.finished, path: 'keyword', goalIds: [], validator: { ok: false } };
   if (plain) trace.plain = true;
   record(trace);
   function guard() {
@@ -71,6 +74,17 @@ export async function liveReply(round: Round, roundId: number, mode: GameStateFo
     guard();
     let problem = liveProblem(round);
     if (problem) return reject(problem);
+    const communication = classifyCommunication(transcript);
+    if (communication.category === 'report' && !communication.unparsed.length && communication.claims.length) {
+      trace.report = true;
+      if (communication.unclear.length) {
+        return communication.claims.some(c => c.ambiguousCount)
+          ? reject('How many at each location?', 'Ambiguous count scope', 'count')
+          : reject('Which enemy and location?', 'Unresolved enemy report', 'target');
+      }
+      trace.validator = { ok: true };
+      return { source: 'keyword', response: response('Copy.') };
+    }
     const match = matchKeyword(transcript);
     let value: BrimResponse;
     if (match.kind === 'your-call' && plain) return reject(PLAIN_REPLY, 'Plain bot: no decision');

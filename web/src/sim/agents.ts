@@ -42,7 +42,7 @@ export function createAgents(random: () => number, routes = FAST_PLANT, carrier 
   const agents = routes.map(r => {
     const a = create(r.id, r.tag, r.role, r.start, r.watch, 'atk');
     a.speed = r.speed;
-    a.delayTicks = a.isBrim ? 0 : r.delayTicks;
+    a.delayTicks = r.delayTicks;
     a.facing = -Math.PI / 2;
     if (!a.isBrim && !assignRoute(a, r.waypoints)) throw new Error('Unreachable play route: ' + r.id);
     return a;
