@@ -1,6 +1,6 @@
 # Talk to Brim — Steps 1–2
 
-Talk to Brim pairs a voice teammate with a deterministic, 20 Hz Bind A simulation. The main page runs one scripted attack; voice replies remain conversational. See the [simulation guide](web/src/sim/README.md) for replay, combat rules and the Step 4 interfaces, or [PLAN.md](PLAN.md) for the project plan.
+Talk to Brim pairs a voice teammate with a deterministic, 20 Hz Bind A simulation. The main page runs one seeded attack with autonomous Brim and scripted teammates; voice replies remain conversational. See the [simulation guide](web/src/sim/README.md) for replay, combat rules and the Step 4 console demos and goal API, or [PLAN.md](PLAN.md) for the project plan.
 
 ## Run
 
@@ -13,7 +13,7 @@ cp .env.example server/.env
 npm run dev
 ```
 
-Open **http://127.0.0.1:5173** in Chrome (map sandbox: **/sandbox.html**, dev only). If that port is occupied, use `WEB_PORT=5174 npm run dev` and open 5174. Ctrl+C stops both servers. Express binds to loopback on 3001 by default. Vite forwards `/api` unchanged to Express, avoiding CORS configuration. Restart dev after changing environment settings so both processes read the same ports.
+Open **http://127.0.0.1:5184** in Chrome (map sandbox: **/sandbox.html**, dev only). Ctrl+C stops both servers. Express binds to loopback on 3001 by default. Vite forwards `/api` unchanged to Express, avoiding CORS configuration. Restart dev after changing environment settings so both processes read the same ports.
 
 | Command | Purpose |
 | --- | --- |
@@ -76,11 +76,11 @@ Each hosted attempt owns its audio element, source buffer, reader, media URL, an
 ```sh
 curl http://127.0.0.1:3001/api/health
 # {"status":"ok"}
-curl -i -X POST http://127.0.0.1:5173/api/brim \
+curl -i -X POST http://127.0.0.1:5184/api/brim \
   -H 'Content-Type: application/json' -d '{"transcript":"Brim, you ready?"}'
 # X-Brim-Source: local (or openai)
 # {"reply":"Ready, rookie. Loud and clear.","actions":[],"needs":null}
-curl -X POST http://127.0.0.1:5173/api/tts \
+curl -X POST http://127.0.0.1:5184/api/tts \
   -H 'Content-Type: application/json' -d '{"text":"Ready, rookie. Loud and clear."}' \
   --output /tmp/brim-speech.mp3
 # Only produces MP3 when hosted TTS is configured. Otherwise returns JSON 503.
@@ -113,7 +113,7 @@ Only `server/.env` is loaded, optionally, and shell environment values take prec
 | Variable | Default / meaning |
 | --- | --- |
 | `PORT` | `3001`, API and matching Vite proxy target |
-| `WEB_PORT` | `5173`, frontend dev port |
+| `WEB_PORT` | `5184`, frontend dev port |
 | `LLM_PROVIDER` | `auto`: OpenAI with a key, local without; `local` forces deterministic replies; `openai` requires a key |
 | `TTS_PROVIDER` | `auto`: OpenAI with a key, browser without; `browser` forces fallback; `openai` requires a key |
 | `OPENAI_API_KEY` | Server-only common key, optional |

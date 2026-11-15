@@ -1,1 +1,1 @@
-Step 3 uses only fastPlant.ts: starting positions, speeds, release ticks, A* goals, final watch points, and the single scripted smoke cue. Play selection and additional plays belong to Step 5.
+Fast Plant defines the attackers’ spawns, speeds, scripted routes and final watches. The four other attackers follow their routes; Brim starts with the controller goals in `sim/round.ts`. His original route is available for recovery. Play selection and additional plays belong to Step 5.

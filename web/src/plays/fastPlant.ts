@@ -1,4 +1,4 @@
-import { ATTACKER_STARTS, PLANT_SPOTS, SMOKE_TARGETS } from '../map/bindA.js';
+import { ATTACKER_STARTS, PLANT_SPOTS } from '../map/bindA.js';
 import type { Role, Vec } from '../map/types.js';
 
 interface Route {
@@ -19,5 +19,3 @@ export const FAST_PLANT: Route[] = [
   { id: 'cypher', tag: 'CYP', role: 'S', start: showers[1]!, speed: 62, delayTicks: 14,
     waypoints: [[805, 508], [665, 501], [670, 445]], watch: [704, 388] },
 ];
-
-export const FAST_PLANT_SMOKE = { tick: 65, to: SMOKE_TARGETS.heaven.at };

@@ -5,10 +5,10 @@ export interface Kill { killer: Agent; victim: Agent }
 
 // Engage after 4 ticks if already aligned; each 0.1 radian of initial turn costs one
 // more tick. A hit does 34 HP; hits are at least 5 ticks apart even across retargets.
-export function resolveCombat(agents: Agent[], sight: Map<string, string[]>, tick: number): Kill[] {
+export function resolveCombat(agents: Agent[], sight: Map<string, string[]>, tick: number, busyActor?: string): Kill[] {
   const kills: Kill[] = [];
   for (const a of agents) {
-    if (!a.alive) continue;
+    if (!a.alive || a.id === busyActor) continue;
     const visible = sight.get(a.id)!;
     let target: Agent | undefined;
     let nearest = Infinity;

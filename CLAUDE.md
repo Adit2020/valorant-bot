@@ -78,8 +78,9 @@ TypeScript everywhere (strict + `noUncheckedIndexedAccess`; relative imports use
 - [x] Plan, research, mentor alignment
 - [x] Steps 0–1: repo, Express API, voice stage, push-to-talk, TTS, subtitles, trace (teammate). Live-provider latency and real-mic checks still manual (see `README.md`).
 - [x] Step 2: map module mounted below the voice stage with the HUD strip (timer · smokes · spike · mode). Stage shrinks to ~35vh on screens ≤ 1200 px tall so stage + map fit one viewport. Brim's icon pulses while his real TTS plays.
-- [x] Step 3: live 20 Hz simulation, seeded fast plant, visibility, combat and Learn slowdown. See `web/src/sim/README.md` for the Step 4 handoff.
-- [ ] Steps 4–10: see `PLAN.md`. **Never cut** call scoring + the transfer test, or the Step 6 failure handling.
+- [x] Step 3: live 20 Hz simulation, seeded fast plant, visibility, combat and Learn slowdown. The other attackers remain scripted.
+- [x] Step 4: autonomous Brim, goal queue, perception, utility, planting/cover and recovery. See `web/src/sim/README.md` for the live console demos and goal API.
+- [ ] Steps 5–10: see `PLAN.md`. **Never cut** call scoring + the transfer test, or the Step 6 failure handling.
 
 ## Commands
 ```bash

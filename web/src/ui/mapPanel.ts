@@ -1,3 +1,7 @@
+import type { Action } from '../../../shared/schema.js';
+import type { Priority } from '../sim/brim.js';
+import { hasLOS } from '../map/geometry.js';
+import { DEFENDER_SPOTS, PLANT_SPOTS } from '../map/bindA.js';
 import { createMapView } from '../map/index.js';
 import { Round, ROUND_TICKS, type RoundEvent } from '../sim/round.js';
 import { DT, FixedClock, timeScale, type Mode } from '../sim/loop.js';
@@ -15,6 +19,7 @@ export interface MapPanelHooks {
 }
 
 export interface MapPanel {
+  readonly brim: Round['brim'];
   setMode(mode: Mode): void;
   syncVoice(): void;
   dispose(): void;
@@ -40,9 +45,12 @@ export function mountMapPanel(root: HTMLElement, hooks: MapPanelHooks): MapPanel
     spike: $('#hud-spike'), mode: $('#hud-mode'),
   };
 
-  const param = new URLSearchParams(location.search).get('seed');
-  const round = new Round(param && /^\d{1,10}$/.test(param) ? Number(param) : 2026);
-  $('.hud-tag').textContent = 'Fast plant · Seed ' + round.seed;
+  const query = new URLSearchParams(location.search);
+  const param = query.get('seed');
+  const lab = import.meta.env.DEV && query.get('agentLab');
+  const practice = lab === 'practice';
+  const round = new Round(param && /^\d{1,10}$/.test(param) ? Number(param) : 2026, { practice });
+  $('.hud-tag').textContent = (practice ? 'Plant drill' : 'Fast plant') + ' · Seed ' + round.seed;
   const fixed = new FixedClock();
   const map = createMapView(canvas, { showLabels: labels.checked, designerView: designer.checked });
   const effects: RoundEvent[] = []; // bounded by one 40-second round; replay on view changes only
@@ -75,6 +83,23 @@ export function mountMapPanel(root: HTMLElement, hooks: MapPanelHooks): MapPanel
     round.reset();
     fixed.reset();
     setPlaying(true);
+  }
+  // Console controls on the live panel only when explicitly requested in dev.
+  // Never expose the roster, clock, or mutable world through this interface.
+  if (import.meta.env.DEV && lab) {
+    const api = {
+      addGoal: (action: Action, priority?: Priority) => round.brim.addGoal(action, priority),
+      cancelGoal: (id: number) => round.brim.cancelGoal(id),
+      clearGoals: () => round.brim.clearGoals(),
+      reset: restart,
+      events: () => round.brim.events(),
+      inspect: () => ({ ...round.brim.inspect(), tick: round.tick, smokes: round.smokesLeft,
+        molly: round.mollyLeft, spike: round.snapshot().spike,
+        heavenBlocked: !hasLOS(DEFENDER_SPOTS.heaven.pos, PLANT_SPOTS.default, round.activeSmokes()),
+        self: round.snapshot().agents.find(a => a.isBrim) }),
+    };
+    Object.assign(window, { brim: api });
+    listeners.signal.addEventListener('abort', () => { Reflect.deleteProperty(window, 'brim'); });
   }
   function togglePlay() {
     if (round.finished) restart();
@@ -152,7 +177,7 @@ export function mountMapPanel(root: HTMLElement, hooks: MapPanelHooks): MapPanel
     const left = round.smokesLeft;
     set(hud.smokes, '●'.repeat(left) + '○'.repeat(3 - left));
     hud.smokes.setAttribute('aria-label', `${left} of 3 smokes left`);
-    set(hud.spike, state.spike.state === 'carried' ? 'Carried' : 'Dropped');
+    set(hud.spike, state.spike.state[0]!.toUpperCase() + state.spike.state.slice(1));
     set(hud.mode, mode === 'learn' ? `Learn · ${scale}×` : 'Match · 1×');
     hud.mode.dataset.slow = String(scale < 1);
     if (!visible) return;
@@ -164,6 +189,7 @@ export function mountMapPanel(root: HTMLElement, hooks: MapPanelHooks): MapPanel
   frame = requestAnimationFrame(tick);
 
   return {
+    get brim() { return round.brim; },
     setMode(next) { mode = next; syncRate(); },
     syncVoice: syncRate,
     dispose() {

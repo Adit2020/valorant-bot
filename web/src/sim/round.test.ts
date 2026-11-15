@@ -89,13 +89,16 @@ test('every move across all three lineups stays on navigation, within speed, and
 });
 
 test('assigned routes replace scripted motion, failing safely on invalid goals', () => {
-  const round = new Round(), start = position(round.snapshot().agents[0]!);
-  assert.equal(round.assignRoute('brim', [[0, 0]]), false);
+  const round = new Round();
+  const raze = () => position(round.snapshot().agents.find(a => a.id === 'raze')!);
+  const start = raze();
+  assert.equal(round.assignRoute('raze', [[0, 0]]), false);
   for (let i = 0; i < 12; i++) round.step();
-  assert.deepEqual(position(round.snapshot().agents[0]!), start);
-  assert.equal(round.assignRoute('brim', [[372, 620]]), true);
+  assert.deepEqual(raze(), start);
+  assert.equal(round.assignRoute('brim', [[372, 620]]), false); // goals own his route
+  assert.equal(round.assignRoute('raze', [[402, 620]]), true);
   round.step();
-  assert.notDeepEqual(position(round.snapshot().agents[0]!), start);
+  assert.notDeepEqual(raze(), start);
 });
 
 function duel(from: Vec, to: Vec) {
@@ -137,15 +140,16 @@ test('cover and smoke prevent all damage; a pre-aimed agent wins the exposed due
 });
 
 test('one smoke event spends one charge; the cloud blocks Heaven only between landing and expiry', () => {
-  const round = new Round();
+  const round = new Round(2026, { practice: true });
+  round.brim.addGoal({ type: 'smoke', target: 'heaven' });
   const [a,b] = duel(DEFENDER_SPOTS.heaven.pos, PLANT_SPOTS.default);
   const events = [];
   for (let i = 1; i <= 380; i++) {
     events.push(...round.step());
-    const blocked = i >= 77 && i < 377;
+    const blocked = i >= 13 && i < 313;
     assert.equal(round.activeSmokes().length, Number(blocked));
     assert.equal(canSee(a,b,round.activeSmokes()), !blocked);
-    assert.equal(round.smokesLeft, i < 65 ? 3 : 2);
+    assert.equal(round.smokesLeft, 2);
   }
   assert.equal(events.filter(e => e.effect.type === 'smoke').length, 1);
 });

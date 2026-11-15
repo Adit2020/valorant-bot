@@ -42,9 +42,9 @@ export function createAgents(random: () => number): Agent[] {
   const agents = FAST_PLANT.map(r => {
     const a = create(r.id, r.tag, r.role, r.start, r.watch, 'atk');
     a.speed = r.speed;
-    a.delayTicks = r.delayTicks;
+    a.delayTicks = a.isBrim ? 0 : r.delayTicks;
     a.facing = -Math.PI / 2;
-    if (!assignRoute(a, r.waypoints)) throw new Error('Unreachable fast plant route: ' + r.id);
+    if (!a.isBrim && !assignRoute(a, r.waypoints)) throw new Error('Unreachable fast plant route: ' + r.id);
     return a;
   });
   const candidates = ['tower', 'cubby', 'triple'] as const;
