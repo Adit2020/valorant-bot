@@ -1,3 +1,6 @@
+import { buyReply, line } from '../comms/buyCall.js';
+import { Round } from '../sim/round.js';
+import type { PlayId } from '../../../shared/schema.js';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Conversation, type ConversationDependencies } from './conversation.js';
@@ -151,4 +154,78 @@ test('empty text does not call backend; cancelling recognition never submits', a
   assert.equal(f.conversation.state, 'idle');
   assert.equal(f.conversation.records[0]!.status, 'interrupted');
   assert.equal(f.requests.length, 0);
+});
+
+test('final speech and typed calls share classification, confirmation, and interruption', async () => {
+  for (const input of ['voice', 'text']) {
+    const r = new Round();
+    const f = setup({ reply: (text, signal) => buyReply(text, signal, id => r.selectPlay(id)) });
+    f.conversation.announce(line("What's the call?", 'round'));
+    if (input === 'voice') {
+      f.conversation.beginListening();
+      f.conversation.release();
+      f.recognition.resolve({ transcript: "Let's fast plant A", endedAt: 125 });
+    } else f.conversation.submitText("Let's fast plant A");
+    await tick();
+    assert.equal(r.play, 'fast_plant');
+    assert.equal(f.conversation.records.at(-1)?.source, 'keyword');
+    assert.deepEqual(f.spoken, ["What's the call?", 'Fast plant. Move.']);
+  }
+});
+
+test('common calls and ambiguous calls bypass the backend', async () => {
+  for (const [texts, expected] of [
+    [['Fast plant', "Let’s fast plant A"], 'fast_plant'],
+    [['Rush', 'Rush Showers', 'Everybody rush'], 'fast_rush'],
+    [['Slow push', 'Take it slow', 'Play slow', 'slow'], 'slow_push'],
+    [["Let's do something.", 'Push that way.', 'Go with the plan.', 'Rush or slow push?', "Don't rush"], null],
+  ] as const) {
+    for (const text of texts) {
+      const r = new Round();
+      let calls = 0;
+      const result = await buyReply(text, new AbortController().signal, id => r.selectPlay(id), async () => { calls++; });
+      assert.equal(calls, 0);
+      assert.equal(r.play, expected);
+      if (!expected) assert.match(result.response.reply, /Which play/);
+    }
+  }
+});
+
+test('messy speech accepts only validated classification and can retry offline with a keyword', async () => {
+  for (const value of [{ play: 'slow_push' }, { play: null }, { play: 'bad' },
+    { play: 'fast_rush', actions: [{ type: 'go' }] }, new Error('offline or timed out')]) {
+    const r = new Round();
+    const select = (id: PlayId) => r.selectPlay(id);
+    const result = await buyReply('Take control gradually', new AbortController().signal, select, async () => {
+      if (value instanceof Error) throw value;
+      return value;
+    });
+    if (result.source === 'openai') assert.equal(r.play, 'slow_push');
+    else {
+      assert.equal(r.phase, 'buy');
+      await buyReply('rush', new AbortController().signal, select);
+      assert.equal(r.play, 'fast_rush');
+    }
+  }
+});
+
+test('restart, timeout and chip announcements supersede pending classifications and recognition', async () => {
+  for (const reason of ['reset', 'chip', 'timeout']) {
+    for (const pending of ['recognition', 'classifier']) {
+      const r = new Round();
+      const old = deferred<unknown>();
+      const f = setup({ reply: (text, signal) => buyReply(text, signal, id => r.selectPlay(id), () => old.promise) });
+      if (pending === 'recognition') { f.conversation.beginListening(); f.conversation.release(); }
+      else f.conversation.submitText('everyone together through showers');
+      if (reason === 'reset') r.reset();
+      if (reason === 'chip') r.selectPlay('fast_rush');
+      if (reason === 'timeout') r.advanceBuy(15000);
+      f.conversation.announce(line('Round announcement.', 'round'));
+      old.resolve({ play: 'slow_push' });
+      f.recognition.resolve({ transcript: 'slow push', endedAt: 145 });
+      await tick();
+      assert.equal(r.play, reason === 'reset' ? null : reason === 'chip' ? 'fast_rush' : 'fast_plant');
+      assert.deepEqual(f.spoken, ['Round announcement.']);
+    }
+  }
 });

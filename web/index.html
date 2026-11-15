@@ -11,7 +11,11 @@
   </div><footer><span id="backend-status" role="status">Connecting…</span><span>AI-generated voice</span></footer>
 </section>
 <section class="map-panel" aria-label="Bind A map">
-  <div class="hud"><div class="hud-item"><span class="hud-k" id="hud-timer-k">Round</span><span class="hud-v" id="hud-timer">0:40</span></div><div class="hud-item"><span class="hud-k">Brim smokes</span><span class="hud-v hud-smokes" id="hud-smokes">●●●</span></div><div class="hud-item"><span class="hud-k">Spike</span><span class="hud-v" id="hud-spike">Carried</span></div><div class="hud-item"><span class="hud-k">Mode</span><span class="hud-v" id="hud-mode">Learn · 1×</span></div><span class="hud-tag" title="Replay this seed with Restart">Fast plant</span></div>
+  <div class="hud"><div class="hud-item"><span class="hud-k" id="hud-timer-k">Buy phase</span><span class="hud-v" id="hud-timer">0:15</span></div><div class="hud-item"><span class="hud-k">Brim smokes</span><span class="hud-v hud-smokes" id="hud-smokes">●●●</span></div><div class="hud-item"><span class="hud-k">Spike</span><span class="hud-v" id="hud-spike">Carried</span></div><div class="hud-item"><span class="hud-k">Mode</span><span class="hud-v" id="hud-mode">Learn · 1×</span></div><span class="hud-tag" title="Replay this seed with Restart">Choose a play</span></div>
+  <div id="buy-plays" role="group" aria-label="Choose a strategy">
+    <span>Call your play</span>
+    <div class="play-chips"></div>
+  </div>
   <div class="map-wrap"><canvas id="map" role="img" aria-label="Top-down map of Bind A with allies, observed defenders, utility and the spike"></canvas></div>
   <div class="map-controls"><button id="map-play" class="quiet" type="button" aria-keyshortcuts="P" aria-pressed="false">Pause</button><button id="map-restart" class="quiet" type="button" aria-keyshortcuts="R">Restart</button><label><input id="map-labels" type="checkbox" checked/> Callouts</label><label><input id="map-designer" type="checkbox" aria-keyshortcuts="D"/> Designer view</label><span class="map-keys"><kbd>P</kbd> play <kbd>R</kbd> restart <kbd>L</kbd> Learn/Match <kbd>D</kbd> designer</span></div>
 </section>

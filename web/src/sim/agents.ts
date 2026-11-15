@@ -32,19 +32,19 @@ export function assignRoute(agent: Agent, goals: Vec[]): boolean {
   return true;
 }
 
-export function createAgents(random: () => number): Agent[] {
+export function createAgents(random: () => number, routes = FAST_PLANT, carrier = 'sova'): Agent[] {
   function create(id: string, tag: string, role: Role, start: Vec, watch: Vec, team: Agent['team']): Agent {
     const [x, y] = start;
     return { id, tag, role, team, x, y, previous: [x, y], watch, facing: Math.atan2(watch[1]-y, watch[0]-x),
-      alive: true, hp: 100, isBrim: id === 'brim', hasSpike: id === 'sova', path: [], speed: 0,
+      alive: true, hp: 100, isBrim: id === 'brim', hasSpike: id === carrier, path: [], speed: 0,
       delayTicks: 0, target: null, readyTick: 0, nextShot: 0 };
   }
-  const agents = FAST_PLANT.map(r => {
+  const agents = routes.map(r => {
     const a = create(r.id, r.tag, r.role, r.start, r.watch, 'atk');
     a.speed = r.speed;
     a.delayTicks = a.isBrim ? 0 : r.delayTicks;
     a.facing = -Math.PI / 2;
-    if (!a.isBrim && !assignRoute(a, r.waypoints)) throw new Error('Unreachable fast plant route: ' + r.id);
+    if (!a.isBrim && !assignRoute(a, r.waypoints)) throw new Error('Unreachable play route: ' + r.id);
     return a;
   });
   const candidates = ['tower', 'cubby', 'triple'] as const;

@@ -1,7 +1,7 @@
 import express, { type ErrorRequestHandler, type Response as ExpressResponse } from 'express';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { BrimRequestSchema, TtsRequestSchema } from '../shared/schema.js';
+import { BuyRequestSchema, BuyCallSchema, BrimRequestSchema, TtsRequestSchema } from '../shared/schema.js';
 import { voiceConfig, llmTimeoutMs, ttsTimeoutMs } from './config.js';
 import { ApiError, createVoiceServices, validateConversationResponse, type VoiceServices } from './voice.js';
 
@@ -32,7 +32,7 @@ export function createApp(services: VoiceServices, timeouts = { llm: llmTimeoutM
   app.use(express.json({ limit: '16kb' }));
   app.get('/api/health', (_req, res) => { res.json({ status: 'ok' }); });
 
-  app.use(['/api/brim', '/api/tts'], (req, res, next) => {
+  app.use(['/api/brim', '/api/tts', '/api/buy-call'], (req, res, next) => {
     if (req.method === 'POST' && !req.is('application/json')) {
       res.status(415).json({ error: { code: 'UNSUPPORTED_MEDIA_TYPE', message: 'Use application/json.' } });
     } else next();
@@ -52,6 +52,22 @@ export function createApp(services: VoiceServices, timeouts = { llm: llmTimeoutM
       if (scope.signal.aborted) throw scope.signal.reason;
       if (error instanceof ApiError) throw error;
       throw new ApiError(502, 'LLM_FAILED', 'Response generation failed. Try again or enable local mode.');
+    } finally { scope.dispose(); }
+  });
+
+  app.post('/api/buy-call', async (req, res) => {
+    const request = BuyRequestSchema.safeParse(req.body);
+    if (!request.success) throw new ApiError(400, 'INVALID_REQUEST', 'Expected a buy-phase transcript.');
+    const scope = requestScope(res, Math.min(2000, timeouts.llm), 'LLM_TIMEOUT');
+    try {
+      const result = await scope.run(services.classifyBuy(request.data.transcript, scope.signal));
+      const parsed = BuyCallSchema.safeParse(result);
+      if (!parsed.success) throw new ApiError(502, 'INVALID_LLM_RESPONSE', 'Invalid play selection.');
+      res.set('Cache-Control', 'no-store').json(parsed.data);
+    } catch (error) {
+      if (scope.signal.aborted) throw scope.signal.reason;
+      if (error instanceof ApiError) throw error;
+      throw new ApiError(502, 'LLM_FAILED', 'Play classification unavailable.');
     } finally { scope.dispose(); }
   });
 

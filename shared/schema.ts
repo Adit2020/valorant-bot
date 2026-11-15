@@ -23,6 +23,11 @@ export const BrimResponseSchema = z.strictObject({
 });
 export type BrimResponse = z.infer<typeof BrimResponseSchema>;
 
+export const PlayIdSchema = z.enum(['fast_plant', 'fast_rush', 'slow_push']);
+export type PlayId = z.infer<typeof PlayIdSchema>;
+export const BuyCallSchema = z.strictObject({ play: PlayIdSchema.nullable() });
+export const BuyRequestSchema = z.strictObject({ transcript: z.string().trim().min(1).max(2000) });
+
 export const GameStateForLLMSchema = z.strictObject({
   phase: z.enum(['buy', 'live', 'post_plant']),
   t: z.number(),
@@ -35,7 +40,7 @@ export const GameStateForLLMSchema = z.strictObject({
   }),
   allies: z.array(z.strictObject({ name: z.string(), region: RegionIdSchema, alive: z.boolean() })),
   knownEnemies: z.array(z.strictObject({ region: RegionIdSchema, count: z.number(), secondsAgo: z.number() })),
-  play: z.enum(['fast_plant', 'fast_rush', 'slow_push']).nullable(),
+  play: PlayIdSchema.nullable(),
 });
 export type GameStateForLLM = z.infer<typeof GameStateForLLMSchema>;
 

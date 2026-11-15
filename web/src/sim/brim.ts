@@ -1,14 +1,13 @@
 // Fast layer: this module can see Brim, his own contacts, the spike carrier's ID,
 // and static map geometry. It has no Round, roster, renderer or clock reference.
 import { ActionSchema, type Action, type BrimEvent, type RegionId } from '../../../shared/schema.js';
-import { ATTACKER_STARTS, PLANT_SPOTS, REGIONS } from '../map/bindA.js';
+import { PLANT_SPOTS, REGIONS } from '../map/bindA.js';
 import { cellCenter, dist, inPlantZone, NAV, navOpen, regionAt } from '../map/geometry.js';
 import type { AgentView, Vec } from '../map/types.js';
 import { FAST_PLANT } from '../plays/fastPlant.js';
 import { DT } from './loop.js';
 
-const script = FAST_PLANT.find(r => r.id === 'brim')!;
-const scriptEnd = script.waypoints.at(-1)!;
+
 // Offset holds leave the carrier's route free and have a clear line to the spot.
 const cover: Record<keyof typeof PLANT_SPOTS, Vec> = { default: [540, 365], alt: [675, 275] };
 const HOLD_TICKS = 20, STALL_TICKS = 60;
@@ -48,6 +47,7 @@ export interface BrimFrame {
 }
 
 export class BrimController {
+  constructor(private readonly script = FAST_PLANT.find(r => r.id === 'brim')!) {}
   private sequence = 0;
   private goals: Goal[] = [];
   private active?: Goal;
@@ -197,11 +197,11 @@ export class BrimController {
       }
       case 'move': case 'go': case 'fallback': {
         const to = 'target' in a ? destination(a.target) :
-          a.type === 'go' ? scriptEnd : ATTACKER_STARTS.short[0]!;
+          a.type === 'go' ? this.script.waypoints.at(-1)! : this.script.start;
         this.enter(f, a.type === 'fallback' ? 'retreat' : 'move');
         if (!to) { this.finish(f, false, 'no navigable target'); return; }
-        if (this.arrive(f, to, a.type === 'go' ? script.waypoints : [to]))
-          this.finish(f, true, 'reached ' + ('target' in a ? a.target : a.type === 'go' ? 'scripted hold' : 'Short spawn'));
+        if (this.arrive(f, to, a.type === 'go' ? this.script.waypoints : [to]))
+          this.finish(f, true, 'reached ' + ('target' in a ? a.target : a.type === 'go' ? 'scripted hold' : 'spawn'));
         return;
       }
       case 'hold': case 'wait': {

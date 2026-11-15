@@ -4,9 +4,9 @@ export type ConversationState = 'idle' | 'listening' | 'thinking' | 'speaking';
 export interface ConversationRecord {
   id: number;
   t: number;
-  input: 'voice' | 'text';
+  input: 'voice' | 'text' | 'round' | 'chip';
   transcript: string;
-  source: 'local' | 'openai' | null;
+  source: 'local' | 'openai' | 'keyword' | 'round' | null;
   audio: 'hosted-stream' | 'hosted-buffered' | 'browser' | null;
   status: 'pending' | 'completed' | 'failed' | 'interrupted';
   response?: BrimResponse;
@@ -19,10 +19,10 @@ export interface ConversationRecord {
 export function attachTurnLog(record: ConversationRecord): void {
   const { stt, think, firstAudio } = record.latencyMs;
   // The existing contract has no local path or N/A numbers. Preserve it exactly.
-  if (record.status === 'completed' && record.source === 'openai' && record.response &&
+  if (record.status === 'completed' && (record.source === 'openai' || record.source === 'keyword') && record.response &&
       stt !== null && think !== null && firstAudio !== null) {
     record.turnLog = {
-      t: record.t, transcript: record.transcript, path: 'llm', response: record.response,
+      t: record.t, transcript: record.transcript, path: record.source === 'keyword' ? 'keyword' : 'llm', response: record.response,
       validator: { ok: true }, latencyMs: { stt, think, firstAudio },
     };
   }

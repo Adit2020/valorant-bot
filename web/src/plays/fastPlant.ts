@@ -1,7 +1,8 @@
 import { ATTACKER_STARTS, PLANT_SPOTS } from '../map/bindA.js';
+import type { Action, PlayId } from '../../../shared/schema.js';
 import type { Role, Vec } from '../map/types.js';
 
-interface Route {
+export interface Route {
   id: string; tag: string; role: Role; start: Vec; waypoints: Vec[];
   speed: number; delayTicks: number; watch: Vec;
 }
@@ -19,3 +20,23 @@ export const FAST_PLANT: Route[] = [
   { id: 'cypher', tag: 'CYP', role: 'S', start: showers[1]!, speed: 62, delayTicks: 14,
     waypoints: [[805, 508], [665, 501], [670, 445]], watch: [704, 388] },
 ];
+
+export interface Play {
+  id: PlayId;
+  name: string;
+  routes: Route[];
+  goals: Action[];
+  utility: string;
+  carrier: string;
+  explanation: string;
+  confirmation: string;
+}
+
+export const fastPlant: Play = {
+  id: 'fast_plant', name: 'Fast Plant', routes: FAST_PLANT, carrier: 'sova',
+  goals: [{ type: 'smoke', target: 'heaven' }, { type: 'smoke', target: 'uhall' },
+    { type: 'move', target: 'a_short' }, { type: 'plant', target: 'default' }],
+  utility: 'Smoke Heaven and U-Hall on entry.',
+  explanation: 'Three take Short with the spike. Two swing from Showers while Brim covers Default.',
+  confirmation: 'Fast plant. Move.',
+};

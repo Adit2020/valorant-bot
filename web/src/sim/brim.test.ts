@@ -128,7 +128,7 @@ test('carrier plants only at the requested spot: interruption resets the full fo
 });
 
 test('default spike stays with Sova; Brim covers from a distinct position with a sightline', () => {
-  const r = new Round(2026); advance(r,240);
+  const r = new Round(2026, { liveDrill: true }); advance(r,240);
   const scene = r.snapshot();
   assert.ok(scene.agents.find(a=>a.id === 'sova')?.hasSpike);
   assert.ok(!self(r).hasSpike); assert.equal(scene.spike.state,'carried');
@@ -139,13 +139,13 @@ test('default spike stays with Sova; Brim covers from a distinct position with a
 });
 
 test('different hidden Omen positions produce identical goals until observed; a new sighting interrupts once', () => {
-  const a = new Round(0), b = new Round(2);
+  const a = new Round(0, { liveDrill: true }), b = new Round(2, { liveDrill: true });
   assert.notDeepEqual(a.snapshot(true).agents.at(-1), b.snapshot(true).agents.at(-1));
   for (let i=0;i<30;i++) {
     assert.deepEqual(a.observations('brim'), b.observations('brim'));
     a.step(); b.step(); assert.deepEqual(a.brim.inspect(), b.brim.inspect()); assert.deepEqual(a.brim.events(), b.brim.events());
   }
-  const r = new Round(2026);
+  const r = new Round(2026, { liveDrill: true });
   for (let i=0;i<30;i++) {
     const seen = r.observations('brim').map(c=>c.id), before = r.brim.events().length;
     r.step();
@@ -161,7 +161,7 @@ test('different hidden Omen positions produce identical goals until observed; a 
 });
 
 test('death closes the controller in the kill tick and subsequent ticks cannot act or spend', () => {
-  const r = new Round(2);
+  const r = new Round(2, { liveDrill: true });
   while(self(r).alive && !r.finished) r.step();
   assert.equal(self(r).alive,false);
   const events = r.brim.events(), at = position(self(r)), left = r.smokesLeft;
@@ -173,7 +173,7 @@ test('death closes the controller in the kill tick and subsequent ticks cannot a
 
 test('same seed and command ticks replay movement, combat, perception, goals, and ordered effects at 30/60/144 fps', () => {
   function run(fps: number) {
-    const r = new Round(2026), clock = new FixedClock(), effects: RoundEvent[] = [], trajectory: ReturnType<typeof position>[] = [];
+    const r = new Round(2026, { liveDrill: true }), clock = new FixedClock(), effects: RoundEvent[] = [], trajectory: ReturnType<typeof position>[] = [];
     for (let i=0; i<fps*40; i++) {
       clock.advance(1000/fps,1,()=>{
         if (r.tick === 25) r.brim.addGoal({type:'smoke',target:'uhall'});
@@ -188,7 +188,7 @@ test('same seed and command ticks replay movement, combat, perception, goals, an
 });
 
 test('a command that deploys the planned Heaven smoke fulfils the outstanding play cue', () => {
-  const r = new Round(2026);
+  const r = new Round(2026, { liveDrill: true });
   const id = r.brim.addGoal({ type:'smoke', target:'heaven' });
   const fx = advance(r,350);
   assert.equal(status(r,id).status,'done');

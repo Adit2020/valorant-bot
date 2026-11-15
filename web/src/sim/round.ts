@@ -1,7 +1,9 @@
-import { SMOKE_TARGETS } from '../map/bindA.js';
+import type { PlayId } from '../../../shared/schema.js';
+import { defaultPlay, plays } from '../plays/index.js';
+import { PLANT_SPOTS, SMOKE_TARGETS } from '../map/bindA.js';
 import { hasLOS, isOpen, type Circle } from '../map/geometry.js';
 import type { RegionId } from '../map/types.js';
-import { BrimController, destination, type BrimFrame } from './brim.js';
+import { BrimController, destination, PLANT_TICKS, type BrimFrame } from './brim.js';
 import type { AgentView, MapEffect, MapState, Vec } from '../map/types.js';
 import { assignRoute, createAgents, moveAgent, position } from './agents.js';
 import { resolveCombat } from './combat.js';
@@ -9,6 +11,7 @@ import { DT } from './loop.js';
 import { mulberry32 } from './rng.js';
 import { perceive, publiclySeen } from './visibility.js';
 
+export const BUY_MS = 15000;
 export const ROUND_TICKS = 800;
 const SMOKE_FLIGHT = 12, SMOKE_LIFE = 300, SMOKE_RADIUS = 46;
 interface Smoke extends Circle { starts: number; ends: number }
@@ -17,10 +20,17 @@ export interface RoundEvent { tick: number; actor: string; subject?: string; pub
 export interface RoundOptions {
   /** Isolated navigation/plant drill: Brim alone, carrying the spike, empty queue. */
   practice?: boolean;
+  liveDrill?: boolean;
 }
 export class Round {
   seed: number;
   tick = 0;
+  private remaining = BUY_MS;
+  private selected: PlayId | null = null;
+  private plantingTicks = 0;
+  get play() { return this.selected; }
+  get buyRemainingMs() { return this.remaining; }
+  get phase() { return !this.options.practice && !this.options.liveDrill && this.selected === null ? 'buy' : 'live'; }
   private smokes = 3;
   private mollies = 1;
   private controller = new BrimController();
@@ -45,16 +55,39 @@ export class Round {
       brim.hasSpike = true;
       return [brim];
     }
+    if (!this.options.liveDrill) return roster;
     this.controller.addGoal({ type: 'move', target: 'a_short' }, 'plan');
     this.controller.addGoal({ type: 'smoke', target: 'heaven' }, 'plan');
     this.controller.addGoal({ type: 'plant', target: 'default' }, 'plan');
     return roster;
+  }
+  selectPlay(id: PlayId): boolean {
+    if (this.phase !== 'buy') return false;
+    const plan = plays[id];
+    const roster = createAgents(mulberry32(this.seed), plan.routes, plan.carrier);
+    const controller = new BrimController(plan.routes.find(route => route.id === 'brim')!);
+    for (const action of plan.goals) controller.addGoal(action, 'plan');
+    this.agents = roster;
+    this.controller = controller;
+    this.sight = perceive(roster, []);
+    this.selected = id;
+    this.remaining = 0;
+    return true;
+  }
+  // Unscaled, active wall time. The live clock starts with a fresh tick accumulator.
+  advanceBuy(elapsedMs: number): boolean {
+    if (this.phase !== 'buy') return false;
+    this.remaining = Math.max(0, this.remaining - Math.max(0, elapsedMs));
+    return this.remaining === 0 && this.selectPlay(defaultPlay);
   }
   get time() { return this.tick * DT; }
   get finished() { return this.tick >= ROUND_TICKS; }
   reset(seed = this.seed) {
     this.seed = seed >>> 0;
     this.tick = 0;
+    this.remaining = BUY_MS;
+    this.selected = null;
+    this.plantingTicks = 0;
     this.smokes = 3; this.mollies = 1;
     this.clouds = [];
     this.spike = { state: 'carried' };
@@ -97,7 +130,7 @@ export class Round {
   }
 
   step(): RoundEvent[] {
-    if (this.finished) return [];
+    if (this.finished || this.phase === 'buy') return [];
     this.tick++;
     const events: RoundEvent[] = [];
     const brim = this.agents.find(a => a.isBrim)!;
@@ -115,7 +148,7 @@ export class Round {
           { state: 'planted', x: brim.x, y: brim.y, plantedAt: this.time };
         if (progress >= 1) brim.hasSpike = false;
       },
-      stopPlant: () => { if (this.spike.state === 'planting') this.spike = { state: 'carried' }; },
+      stopPlant: () => { if (brim.hasSpike && this.spike.state === 'planting') this.spike = { state: 'carried' }; },
     };
     if (brim.alive) this.controller.step(frame);
     const busy = ['plant', 'retreat'].includes(this.controller.currentState);
@@ -131,9 +164,27 @@ export class Round {
         this.spike = { state: 'dropped', x: victim.x, y: victim.y };
       }
     }
+    if (this.selected) this.plantWithCarrier();
     this.sight = perceive(this.agents, smokes);
     if (!brim.alive || this.finished) this.controller.close(frame, brim.alive ? 'round ended' : 'Brim died');
     return events;
+  }
+
+  private plantWithCarrier() {
+    const carrier = this.agents.find(a => a.alive && a.hasSpike && !a.isBrim);
+    if (!carrier) return;
+    const [x, y] = PLANT_SPOTS.default;
+    if (carrier.x !== x || carrier.y !== y || carrier.target || carrier.path.length) {
+      this.plantingTicks = 0;
+      if (this.spike.state === 'planting') this.spike = { state: 'carried' };
+      return;
+    }
+    if (++this.plantingTicks === PLANT_TICKS) {
+      carrier.hasSpike = false;
+      this.spike = { state: 'planted', x, y, plantedAt: this.time };
+    } else {
+      this.spike = { state: 'planting', x, y, progress: this.plantingTicks / PLANT_TICKS };
+    }
   }
 
   private view(a: (typeof this.agents)[number], alpha: number): AgentView {

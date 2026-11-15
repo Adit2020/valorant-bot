@@ -33,7 +33,7 @@ export class Conversation {
   get isHolding(): boolean { return this.state === 'listening' && this.releasedAt === undefined; }
 
   private changed() { this.deps.update(); }
-  private newRecord(input: 'voice' | 'text') {
+  private newRecord(input: ConversationRecord['input']) {
     const record: ConversationRecord = {
       id: this.generation, t: (this.deps.now() - this.origin) / 1000, input,
       transcript: '', source: null, audio: null, status: 'pending', notices: [],
@@ -113,6 +113,17 @@ export class Conversation {
     void this.send(this.generation, record, parsed.data.transcript, this.deps.now());
   }
 
+  announce(result: ReplyResult, chip?: string) {
+    this.cancel();
+    if (chip) this.deps.unlockAudio();
+    const record = this.newRecord(chip ? 'chip' : 'round');
+    record.transcript = chip ?? '';
+    this.abort = new AbortController();
+    this.state = 'thinking';
+    void this.deliver(this.generation, record, result, this.deps.now(), this.abort.signal)
+      .catch(error => this.fail(record.id, record, error));
+  }
+
   private async send(id: number, record: ConversationRecord, transcript: string, speechEnd: number) {
     if (id !== this.generation) return;
     const parsed = BrimRequestSchema.safeParse({ transcript });
@@ -128,31 +139,36 @@ export class Conversation {
       const result = await this.deps.reply(record.transcript, signal);
       if (id !== this.generation) return;
       record.latencyMs.think = this.deps.now() - thinkStart;
-      record.response = this.response = result.response;
-      record.source = result.source;
-      this.message = `${result.source === 'local' ? 'Local fallback' : 'OpenAI'} reply. Preparing speech…`;
-      this.changed();
-      await this.deps.speak(result.response.reply, signal, mode => {
-        if (id !== this.generation) return;
-        if (record.latencyMs.firstAudio === null) record.latencyMs.firstAudio = this.deps.now() - speechEnd;
-        record.audio = mode;
-        this.state = 'speaking';
-        this.message = `${result.source === 'local' ? 'Local fallback' : 'OpenAI'} · ${mode}`;
-        this.changed();
-      }, notice => {
-        if (id !== this.generation) return;
-        record.notices.push(notice);
-        this.message = notice;
-        this.changed();
-      });
-      if (id !== this.generation) return;
-      record.status = 'completed';
-      attachTurnLog(record);
-      this.state = 'idle';
-      this.message = `${result.source === 'local' ? 'Local fallback' : 'OpenAI'} · Ready for another call.${record.notices.length ? ' ' + record.notices.at(-1) : ''}`;
-      this.current = undefined;
-      this.changed();
+      await this.deliver(id, record, result, speechEnd, signal);
     } catch (error) { this.fail(id, record, error); }
+  }
+
+  private async deliver(id: number, record: ConversationRecord, result: ReplyResult, speechEnd: number, signal: AbortSignal) {
+    const label = { local: 'Local fallback', openai: 'OpenAI', keyword: 'Play call', round: 'Round' }[result.source];
+    record.response = this.response = result.response;
+    record.source = result.source;
+    this.message = `${label} reply. Preparing speech…`;
+    this.changed();
+    await this.deps.speak(result.response.reply, signal, mode => {
+      if (id !== this.generation) return;
+      if (record.latencyMs.firstAudio === null) record.latencyMs.firstAudio = this.deps.now() - speechEnd;
+      record.audio = mode;
+      this.state = 'speaking';
+      this.message = `${label} · ${mode}`;
+      this.changed();
+    }, notice => {
+      if (id !== this.generation) return;
+      record.notices.push(notice);
+      this.message = notice;
+      this.changed();
+    });
+    if (id !== this.generation) return;
+    record.status = 'completed';
+    attachTurnLog(record);
+    this.state = 'idle';
+    this.message = `${label} · Ready for another call.${record.notices.length ? ' ' + record.notices.at(-1) : ''}`;
+    this.current = undefined;
+    this.changed();
   }
 
   private fail(id: number, record: ConversationRecord, error: unknown) {

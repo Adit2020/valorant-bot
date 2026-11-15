@@ -1,6 +1,6 @@
 import { BrimRequestSchema, BrimResponseSchema, type BrimResponse } from '../../../shared/schema.js';
 
-export interface ReplyResult { response: BrimResponse; source: 'local' | 'openai' }
+export interface ReplyResult { response: BrimResponse; source: 'local' | 'openai' | 'keyword' | 'round' }
 
 export async function requestReply(transcript: string, signal: AbortSignal): Promise<ReplyResult> {
   let response: Response;

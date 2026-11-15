@@ -105,7 +105,7 @@ test('official SDK uses Responses structured parsing; no paid call is made', asy
     assert.equal(request.model, 'gpt-4.1-mini');
     assert.equal(request.text.format.type, 'json_schema');
     assert.equal(request.store, false);
-    assert.match(request.instructions, /no running simulation/);
+    assert.match(request.instructions, /no live tactical context/);
     return Response.json({ id: 'resp_test', object: 'response', status: 'completed', output: [
       { id: 'msg_test', type: 'message', status: 'completed', role: 'assistant', content: [
         { type: 'output_text', text: JSON.stringify(localReply('ready')), annotations: [] },
@@ -168,4 +168,42 @@ test('TTS provider failures/timeouts return JSON, and client cancellation aborts
     await assert.rejects(pending);
     await cancellation;
   }, { llm: 1000, tts: 25 });
+});
+
+test('buy classifier handles missing credentials, rejects actions, and times out independently', async () => {
+  await serve(local, async base => {
+    const response = await post(base, '/api/buy-call', { transcript: 'Hold for a delayed hit' });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { play: null });
+    assert.equal((await post(base, '/api/buy-call', { transcript: 'rush', play: 'fast_rush' })).status, 400);
+  });
+  let count = 0;
+  await serve({ ...local, async classifyBuy() {
+    if (++count === 1) return { play: 'fast_rush', actions: [{ type: 'go' }] };
+    if (count === 2) return new Promise(() => {});
+    return { play: 'fast_rush' };
+  } }, async base => {
+    for (const status of [502, 504, 200]) {
+      const response = await post(base, '/api/buy-call', { transcript: 'Everyone through showers together' });
+      assert.equal(response.status, status);
+      if (status === 200) assert.deepEqual(await response.json(), { play: 'fast_rush' });
+    }
+  }, { llm: 15, tts: 15000 });
+});
+
+test('configured buy classifier uses SDK structured output containing only a nullable play ID', async () => {
+  const transport: typeof fetch = async (_url, init) => {
+    const request = JSON.parse(String(init?.body));
+    assert.equal(request.text.format.name, 'buy_call');
+    assert.equal(request.text.format.strict, true);
+    assert.deepEqual(Object.keys(request.text.format.schema.properties), ['play']);
+    assert.equal(request.store, false);
+    return Response.json({ id: 'resp_buy', object: 'response', status: 'completed', output: [
+      { id: 'msg_buy', type: 'message', status: 'completed', role: 'assistant', content: [
+        { type: 'output_text', text: '{"play":"slow_push"}', annotations: [] },
+      ] },
+    ] });
+  };
+  const services = createVoiceServices({ ...config, llmProvider: 'openai', llmKey: 'test-only' }, transport);
+  assert.deepEqual(await services.classifyBuy('Hold back until late', new AbortController().signal), { play: 'slow_push' });
 });

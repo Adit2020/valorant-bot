@@ -1,6 +1,6 @@
-# Talk to Brim — Steps 1–2
+# Talk to Brim
 
-Talk to Brim pairs a voice teammate with a deterministic, 20 Hz Bind A simulation. The main page runs one seeded attack with autonomous Brim and scripted teammates; voice replies remain conversational. See the [simulation guide](web/src/sim/README.md) for replay, combat rules and the Step 4 console demos and goal API, or [PLAN.md](PLAN.md) for the project plan.
+Talk to Brim pairs a voice teammate with a deterministic, 20 Hz Bind A simulation. Call a strategy during the 15-second buy phase, type it, or click its chip. Brim confirms the call and the seeded attack begins. Fast Plant is the timeout default. See the [simulation guide](web/src/sim/README.md) for replay, combat rules and the Step 4 console demos and goal API, or [PLAN.md](PLAN.md) for the project plan.
 
 ## Run
 
@@ -27,8 +27,8 @@ Frontend output: `web/dist/`. Backend: `dist/server/`, importing `dist/shared/`.
 
 ## Try it
 
-1. Hold Space, or hold the talk button. Allow Chrome/system microphone permissions.
-2. Say “Brim, you ready?” Interim text appears while you speak.
+1. Press Restart for a fresh buy phase. Hold Space, or hold the talk button. Allow Chrome/system microphone permissions.
+2. Say “Fast plant,” “Rush Showers,” or “Take it slow.” Interim text appears while you speak.
 3. Release. Only finalized recognition text is sent. Brim's reply appears before audio begins.
 4. The state progresses through Listening → Thinking → Speaking → Idle.
 5. Alternatively, enter a message and click Send or press Enter.
@@ -62,7 +62,7 @@ web/src/
   ui/mapPanel.ts              Step 2 integration: map + HUD strip under the voice stage
   sim/testScene.ts            original scripted sandbox round (+ testScene.test.ts)
   sandbox/ (+ sandbox.html)   dev-only map sandbox: scrubber, designer view, coordinate tool
-  plays/                      fastPlant.ts: one attack split between Short and Showers
+  plays/                      three tactical lineups, routes, Brim goals and utility policies
 ```
 
 Voice/brain owner A owns voice/comms/server. B owns later map/UI, C simulation/agents, D plays/evidence. Contracts are shared team ownership; see PLAN.md for smaller-team splits. The old `src/map.js` and `src/plays.js` mentioned in PLAN.md are absent here. Neither has been invented or ported.
@@ -86,7 +86,9 @@ curl -X POST http://127.0.0.1:5184/api/tts \
 # Only produces MP3 when hosted TTS is configured. Otherwise returns JSON 503.
 ```
 
-`POST /api/brim`: `{ transcript: string, gameState?: GameStateForLLM }`. Transcript is trimmed, nonempty, max 2000 characters. Existing text-only callers remain valid. Optional context uses the exact shared schema; the frontend sends none because there is no simulation. `BrimResponse` body fields are unchanged. `X-Brim-Source` distinguishes `local` from `openai` without inventing new body fields.
+`POST /api/brim`: `{ transcript: string, gameState?: GameStateForLLM }`. Transcript is trimmed, nonempty, max 2000 characters. Existing text-only callers remain valid. Optional context uses the exact shared schema; the conversational client sends only the transcript. Buy-phase classification uses the dedicated endpoint below. `BrimResponse` body fields are unchanged. `X-Brim-Source` distinguishes `local` from `openai` without inventing new body fields.
+
+`POST /api/buy-call` accepts `{ transcript }` and returns only `{ play }`, where play is a shared play ID or null for clarification. The browser resolves common buy calls locally. An optional structured-output model classifies strategy-bearing paraphrases with a two-second deadline. Both ends validate the result. On failure, the buy phase stays open until a valid choice or timeout.
 
 **Deliberately bounded conversation:** the LLM uses Responses structured output to interpret speech and select among eight concise, original voice-check replies in `server/voice.ts`. This is intentionally not unrestricted chat: an output reply must belong to that set, contain at most 12 words, and have `actions: []` and `needs: null`. This guarantees Brim cannot hallucinate performed gameplay in Step 1a, even if asked to ignore instructions. Readiness, repeat requests, thanks, and unconnected game requests are represented. The deterministic local fallback recognizes only basic greetings/readiness; everything else explicitly says actions are not connected. It is not the Step 6 keyword matcher. Expand response generation alongside actual game semantics in later steps.
 

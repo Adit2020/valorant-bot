@@ -1,4 +1,5 @@
 import { HealthResponseSchema } from '../../shared/schema.js';
+import { buyReply, line } from './comms/buyCall.js';
 import { requestReply } from './comms/brimClient.js';
 import { Conversation } from './voice/conversation.js';
 import { bindPushToTalk } from './voice/controls.js';
@@ -31,7 +32,10 @@ let previousState = 'idle';
 let logSignature = '';
 const talkButton = element<HTMLButtonElement>('#push-to-talk');
 const conversation = new Conversation({
-  capture: interim => startCapture(interim), reply: requestReply,
+  capture: interim => startCapture(interim),
+  reply: (text, signal) => mapPanel.phase === 'buy'
+    ? buyReply(text, signal, mapPanel.selectPlay)
+    : requestReply(text, signal),
   speak: (...args) => speech.speak(...args),
   stopAudio: () => speech.stop(), unlockAudio: () => speech.unlock(),
   now: () => performance.now(), update: () => render(),
@@ -70,7 +74,7 @@ function render() {
     detail.className = 'log-detail';
     detail.textContent = `#${conversation.records.indexOf(record)+1} · ${record.t.toFixed(1)}s · ${record.status} · ${record.source === 'local' ? 'local fallback' : record.source || record.input}${record.audio ? ` · ${record.audio}` : ''}${record.error ? ` · ${record.error}` : ''}${record.notices.length ? ` · ${record.notices.at(-1)}` : ''}`;
     row.append(detail);
-    for (const [speaker,message] of [['You',record.transcript || '(no final transcript)'], ['Brim',record.response?.reply]]) {
+    for (const [speaker,message] of [['You',record.transcript || (record.input === 'voice' ? '(no final transcript)' : '')], ['Brim',record.response?.reply]]) {
       if (!message) continue;
       const line = document.createElement('p');
       const label = document.createElement('span'); label.className = 'speaker'; label.textContent = speaker!;
@@ -84,8 +88,11 @@ let mode: Mode = 'learn';
 const mapPanel = mountMapPanel(element('.map-panel'), {
   isTalking: () => conversation.isHolding,
   isBrimSpeaking: () => conversation.state === 'speaking',
+  announce: (text, chip) => conversation.announce(line(text, 'round'), chip),
+  resetVoice: () => conversation.cancel(),
   toggleMode: () => setMode(mode === 'learn' ? 'match' : 'learn'),
 });
+if (mapPanel.phase === 'buy') conversation.announce(line("What's the call?", 'round'));
 function setMode(next: Mode) {
   mode = next;
   modeButtons.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.mode === next)));

@@ -1,10 +1,11 @@
-import type { Action } from '../../../shared/schema.js';
+import type { Action, PlayId } from '../../../shared/schema.js';
 import type { Priority } from '../sim/brim.js';
 import { hasLOS } from '../map/geometry.js';
 import { DEFENDER_SPOTS, PLANT_SPOTS } from '../map/bindA.js';
 import { createMapView } from '../map/index.js';
 import { Round, ROUND_TICKS, type RoundEvent } from '../sim/round.js';
 import { DT, FixedClock, timeScale, type Mode } from '../sim/loop.js';
+import { defaultPlay, plays } from '../plays/index.js';
 import { isTypingTarget } from '../voice/controls.js';
 
 export type { Mode } from '../sim/loop.js';
@@ -16,9 +17,13 @@ export interface MapPanelHooks {
   isBrimSpeaking(): boolean;
   /** Called for the L shortcut, so the voice stage's Learn/Match buttons stay the single control. */
   toggleMode(): void;
+  announce(text: string, chip?: string): void;
+  resetVoice(): void;
 }
 
 export interface MapPanel {
+  readonly phase: Round['phase'];
+  selectPlay(id: PlayId): boolean;
   readonly brim: Round['brim'];
   setMode(mode: Mode): void;
   syncVoice(): void;
@@ -49,8 +54,10 @@ export function mountMapPanel(root: HTMLElement, hooks: MapPanelHooks): MapPanel
   const param = query.get('seed');
   const lab = import.meta.env.DEV && query.get('agentLab');
   const practice = lab === 'practice';
-  const round = new Round(param && /^\d{1,10}$/.test(param) ? Number(param) : 2026, { practice });
-  $('.hud-tag').textContent = (practice ? 'Plant drill' : 'Fast plant') + ' · Seed ' + round.seed;
+  const round = new Round(param && /^\d{1,10}$/.test(param) ? Number(param) : 2026, { practice, liveDrill: lab === 'live' });
+  const tag = $('.hud-tag');
+  const choices = $('#buy-plays');
+  const chips = $('.play-chips');
   const fixed = new FixedClock();
   const map = createMapView(canvas, { showLabels: labels.checked, designerView: designer.checked });
   const effects: RoundEvent[] = []; // bounded by one 40-second round; replay on view changes only
@@ -71,6 +78,32 @@ export function mountMapPanel(root: HTMLElement, hooks: MapPanelHooks): MapPanel
     el.textContent = value;
   };
 
+  function showPhase() {
+    const buying = round.phase === 'buy';
+    choices.hidden = !buying;
+    const name = round.play ? plays[round.play].name : practice ? 'Plant drill' : 'Live drill';
+    set(tag, (buying ? '' : name + ' · ') + 'Seed ' + round.seed);
+    set(hud.timerKey, buying ? 'Buy phase' : round.finished ? 'Finished' : 'Live');
+    set(hud.timer, clock(buying ? round.buyRemainingMs / 1000 : ROUND_TICKS * DT - round.time));
+  }
+
+  function selectPlay(id: PlayId) {
+    advance(performance.now()); // settle the deadline even between animation frames
+    if (!round.selectPlay(id)) return false;
+    showPhase();
+    return true;
+  }
+
+  for (const play of Object.values(plays)) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.textContent = play.name;
+    chip.addEventListener('click', () => {
+      if (selectPlay(play.id)) hooks.announce(play.confirmation, play.name);
+    }, on);
+    chips.append(chip);
+  }
+
   function setPlaying(next: boolean) {
     lastFrame = performance.now();
     playing = next;
@@ -83,6 +116,9 @@ export function mountMapPanel(root: HTMLElement, hooks: MapPanelHooks): MapPanel
     round.reset();
     fixed.reset();
     setPlaying(true);
+    showPhase();
+    if (round.phase === 'buy') hooks.announce("What's the call?");
+    else hooks.resetVoice();
   }
   // Console controls on the live panel only when explicitly requested in dev.
   // Never expose the roster, clock, or mutable world through this interface.
@@ -152,6 +188,13 @@ export function mountMapPanel(root: HTMLElement, hooks: MapPanelHooks): MapPanel
     const elapsed = now - lastFrame;
     lastFrame = now;
     if (!playing || document.hidden) return;
+    if (round.phase === 'buy') {
+      if (round.advanceBuy(elapsed)) {
+        showPhase();
+        hooks.announce('Time’s up. ' + plays[defaultPlay].confirmation);
+      }
+      return;
+    }
     fixed.advance(elapsed, scale, () => {
       for (const event of round.step()) {
         effects.push(event);
@@ -163,8 +206,10 @@ export function mountMapPanel(root: HTMLElement, hooks: MapPanelHooks): MapPanel
 
   // Settle the old rate up to the input timestamp, even between two animation frames.
   function syncRate() {
-    advance(performance.now());
-    scale = timeScale(mode, hooks.isTalking());
+    const next = timeScale(mode, hooks.isTalking());
+    if (scale === next) return;
+    if (round.phase === 'live') advance(performance.now());
+    scale = next;
   }
   document.addEventListener('visibilitychange', () => { lastFrame = performance.now(); }, on);
 
@@ -172,23 +217,25 @@ export function mountMapPanel(root: HTMLElement, hooks: MapPanelHooks): MapPanel
     frame = requestAnimationFrame(tick);
     advance(performance.now());
     const state = round.snapshot(designer.checked, round.finished ? 1 : fixed.alpha);
-    set(hud.timerKey, round.finished ? 'Finished' : 'Round');
-    set(hud.timer, clock(ROUND_TICKS * DT - round.time));
+    showPhase();
     const left = round.smokesLeft;
     set(hud.smokes, '●'.repeat(left) + '○'.repeat(3 - left));
     hud.smokes.setAttribute('aria-label', `${left} of 3 smokes left`);
     set(hud.spike, state.spike.state[0]!.toUpperCase() + state.spike.state.slice(1));
-    set(hud.mode, mode === 'learn' ? `Learn · ${scale}×` : 'Match · 1×');
-    hud.mode.dataset.slow = String(scale < 1);
+    set(hud.mode, mode === 'learn' ? `Learn · ${round.phase === 'buy' ? 1 : scale}×` : 'Match · 1×');
+    hud.mode.dataset.slow = String(round.phase === 'live' && scale < 1);
     if (!visible) return;
     const brim = state.agents.find(a => a.isBrim);
     if (brim) brim.speaking = hooks.isBrimSpeaking();
     map.render(state, round.time + (round.finished ? 0 : fixed.alpha * DT));
   }
+  showPhase();
   setPlaying(true);
   frame = requestAnimationFrame(tick);
 
   return {
+    selectPlay,
+    get phase() { return round.phase; },
     get brim() { return round.brim; },
     setMode(next) { mode = next; syncRate(); },
     syncVoice: syncRate,
