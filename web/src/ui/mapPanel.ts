@@ -99,7 +99,8 @@ export function mountMapPanel(root: HTMLElement, hooks: MapPanelHooks): MapPanel
     choices.hidden = !buying;
     const name = round.play ? plays[round.play].name : practice ? 'Plant drill' : 'Live drill';
     set(tag, (buying ? '' : name + ' · ') + 'Seed ' + round.seed);
-    set(hud.timerKey, buying ? 'Buy phase' : round.finished ? 'Finished' : 'Live');
+    const result = round.outcome === 'win' ? 'Round won' : round.outcome === 'loss' ? 'Round lost' : 'Finished';
+    set(hud.timerKey, buying ? 'Buy phase' : round.finished ? result : 'Live');
     set(hud.timer, clock(buying ? round.buyRemainingMs / 1000 : ROUND_TICKS * DT - round.time));
   }
 

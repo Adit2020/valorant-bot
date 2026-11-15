@@ -169,7 +169,7 @@ test('final speech and typed calls share classification, confirmation, and inter
     await tick();
     assert.equal(r.play, 'fast_plant');
     assert.equal(f.conversation.records.at(-1)?.source, 'keyword');
-    assert.deepEqual(f.spoken, ["What's the call?", 'Fast plant. Move.']);
+    assert.deepEqual(f.spoken, ["What's the call?", 'Fast plant. Call my smokes.']);
   }
 });
 

@@ -72,13 +72,10 @@ for (const id of PlayIdSchema.options) {
       }
       assert.ok(events.some(e => e.effect.type === 'kill'));
       assert.equal(showers.size, id === 'fast_rush' ? 5 : 2);
-      assert.equal(r.smokesLeft, id === 'fast_plant' ? 1 : 3);
-      if (id === 'fast_plant') {
-        assert.equal(plantingTicks, 79);
-        assert.equal(r.snapshot().spike.state, 'planted');
-        assert.ok(previous.every(a => !a.hasSpike));
-        assert.ok(r.brim.events().some(e => e.detail.includes('covered sova')));
-      }
+      // No play spends utility on its own: Brim smokes only when the player calls it.
+      assert.equal(r.smokesLeft, 3);
+      // With no calls the scripted attack walks into held angles and loses (sim/rules.ts).
+      assert.equal(r.outcome, 'loss');
       return { events, snapshot: r.snapshot(true), decisions: r.brim.events() };
     }
     const result = run();

@@ -34,9 +34,9 @@ export interface Play {
 
 export const fastPlant: Play = {
   id: 'fast_plant', name: 'Fast Plant', routes: FAST_PLANT, carrier: 'sova',
-  goals: [{ type: 'smoke', target: 'heaven' }, { type: 'smoke', target: 'uhall' },
-    { type: 'move', target: 'a_short' }, { type: 'plant', target: 'default' }],
-  utility: 'Smoke Heaven and U-Hall on entry.',
+  // No automatic utility: Brim smokes only when the player calls it, so silence loses the round.
+  goals: [{ type: 'move', target: 'a_short' }, { type: 'plant', target: 'default' }],
+  utility: 'Call my smokes on entry: Heaven and the Truck gap block the site angles.',
   explanation: 'Three take Short with the spike. Two swing from Showers while Brim covers Default.',
-  confirmation: 'Fast plant. Move.',
+  confirmation: 'Fast plant. Call my smokes.',
 };

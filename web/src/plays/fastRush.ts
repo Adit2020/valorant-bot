@@ -14,7 +14,7 @@ export const fastRush: Play = {
   id: 'fast_rush', name: 'Fast Rush', carrier: 'sova',
   routes: FAST_PLANT.map(route => ({ ...route, ...lanes[route.id]! })),
   goals: [{ type: 'move', target: 'showers' }, { type: 'move', target: 'tower' }, { type: 'plant', target: 'default' }],
-  utility: 'No opening smokes. Prioritize movement behind the entry.',
+  utility: 'Call smokes before the swing: Heaven and the Truck gap, then Tower if someone is there.',
   explanation: 'All five stage in A Lobby and enter through Showers behind Raze.',
   confirmation: 'Rush Showers. Go.',
 };

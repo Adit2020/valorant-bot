@@ -3,7 +3,8 @@ import { CalloutGenerator } from '../comms/calloutGen.js';
 import { setupCalloutDrill, type CalloutDrill } from './calloutDrill.js';
 import { defaultPlay, plays } from '../plays/index.js';
 import { PLANT_SPOTS, SMOKE_TARGETS } from '../map/bindA.js';
-import { hasLOS, isOpen, type Circle } from '../map/geometry.js';
+import { dist, hasLOS, isOpen, regionAt, type Circle } from '../map/geometry.js';
+import { MOLLY_DAMAGE_PER_TICK, MOLLY_FLIGHT_TICKS, MOLLY_TICKS, PICKUP_RADIUS, type Outcome } from './rules.js';
 import type { RegionId } from '../map/types.js';
 import { BrimController, destination, PLANT_TICKS, type BrimFrame } from './brim.js';
 import type { AgentView, MapEffect, MapState, Vec } from '../map/types.js';
@@ -51,6 +52,7 @@ export class Round {
   get brim(): Pick<BrimController, 'addGoal' | 'cancelGoal' | 'clearGoals' | 'inspect' | 'events' | 'goalStatus' | 'recovering'> { return this.controller; }
   private agents;
   private clouds: Smoke[] = [];
+  private fires: { region: RegionId; starts: number; ends: number }[] = [];
   private sight: Map<string, string[]>;
   private spike: MapState['spike'] = { state: 'carried' };
 
@@ -94,7 +96,19 @@ export class Round {
     return this.remaining === 0 && this.selectPlay(defaultPlay);
   }
   get time() { return this.tick * DT; }
-  get finished() { return this.tick >= ROUND_TICKS; }
+  /**
+   * Only rounds with a chosen play have an outcome; drills and the buy phase do not.
+   * Defenders wiped → win. Attackers wiped → loss (they defuse). At time: planted → win, else loss.
+   */
+  get outcome(): Outcome | null {
+    if (this.selected === null) return null;
+    const alive = (team: AgentView['team']) => this.agents.some(a => a.team === team && a.alive);
+    if (!alive('def')) return 'win';
+    if (!alive('atk')) return 'loss';
+    if (this.tick >= ROUND_TICKS) return this.spike.state === 'planted' ? 'win' : 'loss';
+    return null;
+  }
+  get finished() { return this.tick >= ROUND_TICKS || this.outcome !== null; }
   reset(seed = this.seed) {
     this.seed = seed >>> 0;
     this.tick = 0;
@@ -104,6 +118,7 @@ export class Round {
     this.plantingTicks = 0;
     this.smokes = 3; this.mollies = 1;
     this.clouds = [];
+    this.fires = [];
     this.spike = { state: 'carried' };
     this.agents = this.setup();
     this.sight = perceive(this.agents, []);
@@ -136,6 +151,7 @@ export class Round {
       if (!this.mollies) return 'no molly charges';
       if (!hasLOS(from, to)) return 'molly trajectory blocked';
       this.mollies--;
+      this.fires.push({ region: target, starts: this.tick + MOLLY_FLIGHT_TICKS, ends: this.tick + MOLLY_FLIGHT_TICKS + MOLLY_TICKS });
     }
     events.push({ tick: this.tick, actor: 'brim', public: true,
       effect: { type: kind, from: kind === 'smoke' ? [...to] : from, to: [...to], duration: kind === 'smoke' ? SMOKE_LIFE * DT : 7 } });
@@ -167,7 +183,8 @@ export class Round {
     if (busy) brim.target = null;
     for (const a of this.agents) moveAgent(a, this.tick, this.agents);
     const before = perceive(this.agents, smokes);
-    for (const { killer, victim } of resolveCombat(this.agents, before, this.tick, busy ? brim.id : undefined)) {
+    // Real rounds (a play was chosen) use the hold rule from rules.ts; controller drills keep the classic duel.
+    for (const { killer, victim } of resolveCombat(this.agents, before, this.tick, busy ? brim.id : undefined, this.selected !== null)) {
       events.push({ tick: this.tick, actor: killer.id, subject: victim.id,
         public: victim.team === 'atk' || publiclySeen(before, victim.id),
         effect: { type: 'kill', at: position(victim), killer: killer.tag, victim: victim.tag, killerTeam: killer.team } });
@@ -176,11 +193,45 @@ export class Round {
         this.spike = { state: 'dropped', x: victim.x, y: victim.y };
       }
     }
-    if (this.selected) this.plantWithCarrier();
+    this.burn(brim, events);
+    if (this.selected) { this.recoverSpike(); this.plantWithCarrier(); }
     this.sight = perceive(this.agents, smokes);
     this.generator.observe(this.tick, brim.alive && !this.finished ? this.observations('brim') : []);
     if (!brim.alive || this.finished) this.controller.close(frame, brim.alive ? 'round ended' : 'Brim died');
     return events;
+  }
+
+  // Defenders standing in a burning region take damage; a molly kill is credited to Brim.
+  private burn(brim: (typeof this.agents)[number], events: RoundEvent[]) {
+    this.fires = this.fires.filter(f => f.ends > this.tick);
+    for (const fire of this.fires) {
+      if (this.tick < fire.starts) continue;
+      for (const d of this.agents) {
+        if (d.team !== 'def' || !d.alive || regionAt(d.x, d.y) !== fire.region) continue;
+        d.hp = Math.max(0, d.hp - MOLLY_DAMAGE_PER_TICK);
+        if (d.hp) continue;
+        d.alive = false; d.target = null; d.path = [];
+        events.push({ tick: this.tick, actor: brim.id, subject: d.id, public: true,
+          effect: { type: 'kill', at: position(d), killer: brim.tag, victim: d.tag, killerTeam: 'atk' } });
+      }
+    }
+  }
+
+  // The nearest living attacker (not Brim, whose plant is a goal) walks to a dropped spike and carries it to Default.
+  private recoverSpike() {
+    if (this.spike.state !== 'dropped') return;
+    const at: Vec = [this.spike.x, this.spike.y];
+    const runners = this.agents.filter(a => a.team === 'atk' && a.alive && !a.isBrim);
+    if (!runners.length) return;
+    const near = runners.reduce((best, a) => dist(position(a), at) < dist(position(best), at) ? a : best);
+    if (dist(position(near), at) <= PICKUP_RADIUS) {
+      near.hasSpike = true;
+      this.spike = { state: 'carried' };
+      assignRoute(near, [PLANT_SPOTS.default]);
+      return;
+    }
+    const goal = near.path.at(-1);
+    if (!near.target && (!goal || dist(goal, at) > 1)) assignRoute(near, [at]);
   }
 
   private plantWithCarrier() {

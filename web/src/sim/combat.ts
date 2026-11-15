@@ -1,11 +1,12 @@
 import { bearing, position, type Agent } from './agents.js';
+import { HOLD_CONE, HOLD_REACTION_TICKS } from './rules.js';
 import { angleError } from './visibility.js';
 
 export interface Kill { killer: Agent; victim: Agent }
 
 // Engage after 4 ticks if already aligned; each 0.1 radian of initial turn costs one
 // more tick. A hit does 34 HP; hits are at least 5 ticks apart even across retargets.
-export function resolveCombat(agents: Agent[], sight: Map<string, string[]>, tick: number, busyActor?: string): Kill[] {
+export function resolveCombat(agents: Agent[], sight: Map<string, string[]>, tick: number, busyActor?: string, holdAdvantage = false): Kill[] {
   const kills: Kill[] = [];
   for (const a of agents) {
     if (!a.alive || a.id === busyActor) continue;
@@ -22,7 +23,9 @@ export function resolveCombat(agents: Agent[], sight: Map<string, string[]>, tic
     const aim = bearing(a, position(target));
     if (a.target !== target.id) {
       a.target = target.id;
-      a.readyTick = tick + 4 + Math.ceil(angleError(aim - a.facing) * 10);
+      // A stationary defender already aimed down its angle fires first (see rules.ts).
+      const holding = holdAdvantage && a.team === 'def' && !a.path.length && angleError(aim - a.facing) <= HOLD_CONE;
+      a.readyTick = tick + (holding ? HOLD_REACTION_TICKS : 4 + Math.ceil(angleError(aim - a.facing) * 10));
     }
     a.facing = aim;
     if (tick < Math.max(a.readyTick, a.nextShot)) continue;

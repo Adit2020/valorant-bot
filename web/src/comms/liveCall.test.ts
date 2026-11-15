@@ -62,7 +62,7 @@ test('command reservation is atomic, counts plan overlap, and charges only on su
   const second = await call(r, 'Smoke Truck', noModel);
   assert.equal(first.trace.goalIds.length,1); assert.equal(second.trace.goalIds.length,1);
   assert.deepEqual(r.brim.inspect().queue.slice(0,2).map(g=>g.id), [...first.trace.goalIds,...second.trace.goalIds]);
-  const bad = await call(r, 'Move Triple and smoke Vent', noModel);
+  const bad = await call(r, 'Move Triple and smoke Vent and smoke Tower', noModel); // 4 smokes > 3 charges
   assert.equal(bad.response.reply, 'Out of smokes.'); assert.deepEqual(bad.trace.goalIds,[]);
   assert.equal(r.smokesLeft,3);
   r.step(); assert.equal(r.smokesLeft,2);
