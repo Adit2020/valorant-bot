@@ -1,4 +1,6 @@
 import type { PlayId } from '../../../shared/schema.js';
+import { CalloutGenerator } from '../comms/calloutGen.js';
+import { setupCalloutDrill, type CalloutDrill } from './calloutDrill.js';
 import { defaultPlay, plays } from '../plays/index.js';
 import { PLANT_SPOTS, SMOKE_TARGETS } from '../map/bindA.js';
 import { hasLOS, isOpen, type Circle } from '../map/geometry.js';
@@ -27,6 +29,7 @@ export interface RoundOptions {
   /** Isolated navigation/plant drill: Brim alone, carrying the spike, empty queue. */
   practice?: boolean;
   liveDrill?: boolean;
+  calloutDrill?: CalloutDrill;
 }
 export class Round {
   seed: number;
@@ -36,9 +39,12 @@ export class Round {
   private plantingTicks = 0;
   get play() { return this.selected; }
   get buyRemainingMs() { return this.remaining; }
-  get phase() { return !this.options.practice && !this.options.liveDrill && this.selected === null ? 'buy' : 'live'; }
+  get phase() { return !this.options.practice && !this.options.liveDrill && !this.options.calloutDrill && this.selected === null ? 'buy' : 'live'; }
   private smokes = 3;
   private mollies = 1;
+  private generator = new CalloutGenerator();
+  get callouts() { return this.generator; }
+  get canCallout() { return this.phase === 'live' && !this.finished && this.agents.some(a => a.isBrim && a.alive); }
   private controller = new BrimController();
   get smokesLeft() { return this.smokes; }
   get mollyLeft() { return this.mollies; }
@@ -56,6 +62,7 @@ export class Round {
   private setup() {
     const roster = createAgents(mulberry32(this.seed));
     this.controller = new BrimController();
+    if (this.options.calloutDrill) return setupCalloutDrill(roster, this.options.calloutDrill);
     if (this.options.practice) {
       const brim = roster.find(a => a.isBrim)!;
       brim.hasSpike = true;
@@ -91,6 +98,7 @@ export class Round {
   reset(seed = this.seed) {
     this.seed = seed >>> 0;
     this.tick = 0;
+    this.generator = new CalloutGenerator();
     this.remaining = BUY_MS;
     this.selected = null;
     this.plantingTicks = 0;
@@ -170,6 +178,7 @@ export class Round {
     }
     if (this.selected) this.plantWithCarrier();
     this.sight = perceive(this.agents, smokes);
+    this.generator.observe(this.tick, brim.alive && !this.finished ? this.observations('brim') : []);
     if (!brim.alive || this.finished) this.controller.close(frame, brim.alive ? 'round ended' : 'Brim died');
     return events;
   }

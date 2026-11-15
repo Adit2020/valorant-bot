@@ -22,7 +22,7 @@ export interface RoundTrace {
 export interface ConversationRecord {
   id: number;
   t: number;
-  input: 'voice' | 'text' | 'round' | 'chip';
+  input: 'voice' | 'text' | 'round' | 'chip' | 'callout';
   transcript: string;
   source: 'local' | 'openai' | 'keyword' | 'round' | null;
   audio: 'hosted-stream' | 'hosted-buffered' | 'browser' | null;
@@ -33,6 +33,7 @@ export interface ConversationRecord {
   notices: string[];
   turnLog?: TurnLog;
   command?: CommandTrace;
+  callout?: { roundId: number; sightingId: string };
 }
 
 export function attachTurnLog(record: ConversationRecord): void {

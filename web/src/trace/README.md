@@ -5,3 +5,11 @@ Download trace exports version 2, with conversation records plus a rounds array.
 Each rounds entry includes seed, roundId, end (restart or current) and time-ordered BrimEvents. Join command goal IDs to controller events within the same round. A did event records a real simulation action. Deployment precedes smoke landing by 12 ticks. A said event links a turn ID and its line to the first observed playback-start callback. Audio failure before playback leaves the subtitle and no said event.
 
 Simulation timestamps use round seconds. Conversation timestamps use seconds since page initialization. Durations use client performance.now() in milliseconds. Restart archives the departing round; reload clears in-memory history.
+
+## Automatic enemy speech
+
+An automatic conversation record has `input: "callout"` and a `callout` with `roundId` and `sightingId`. Within that round, find the matching `saw` event. Its `sighting` contains the post-combat tick, region, sorted distinct defender IDs and count. The ID is local to the round. Controller observations at the start of a tick continue to appear separately.
+
+Follow the same `sightingId` through the events. `generated` contains the template text. `skipped` explains why a pending line was dropped. `scheduled` reserves the conversation channel. Only `started` has kind `said`, with the actual line. A scheduled line ends in `completed`, `canceled` or `failed`. A canceled line may have started before the interruption. A failure before the start callback records no `said`, and the attempted line stays in history.
+
+Hosted audio reports the media element's first `playing` event. Browser synthesis reports the utterance's `onstart`. These callbacks indicate that the playback engine started, even on a muted device. For callouts, `latencyMs.firstAudio` measures wall time from scheduling to that callback. Queue delay can be inspected separately using the observation and scheduling events' simulation times.

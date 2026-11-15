@@ -229,3 +229,100 @@ test('restart, timeout and chip announcements supersede pending classifications 
     }
   }
 });
+
+function visibleCall() {
+  const r = new Round(2026, { calloutDrill: 'sighting' });
+  r.step();
+  const call = r.callouts.take()!;
+  return { r, call, report: (stage: import('../comms/calloutGen.js').PlaybackStage, detail?: string) =>
+    r.callouts.playback(call, stage, detail) };
+}
+
+test('automatic playback reserves the idle channel once, joins real observation, and leaves commands uninterrupted', async () => {
+  const { r, call, report } = visibleCall();
+  const done = deferred<void>();
+  let starts = 0;
+  const f = setup({ async speak(_text, _signal, start) {
+    starts++; start('browser'); start('browser'); await done.promise;
+  } });
+  assert.ok(f.conversation.tryCallout(call, 1, report));
+  assert.equal(f.conversation.tryCallout(call, 1, report), false);
+  await tick();
+  assert.equal(starts, 1);
+  assert.equal(f.conversation.response?.reply, 'One Heaven.');
+  const key = f.conversation.records[0]!.callout!;
+  assert.deepEqual(key, { roundId: 1, sightingId: call.sighting.id });
+  const events = r.callouts.events().filter(e => e.sightingId === key.sightingId);
+  assert.deepEqual(events.map(e => e.calloutStage ?? e.kind), ['saw','generated','scheduled','started']);
+  assert.deepEqual(events[0]!.sighting?.defenderIds, ['jett']);
+  assert.equal(events.at(-1)!.kind, 'said');
+  f.conversation.beginListening();
+  assert.equal(f.conversation.records[0]!.status, 'interrupted');
+  assert.equal(r.callouts.events().at(-1)?.calloutStage, 'canceled');
+  assert.equal(f.conversation.tryCallout(call, 1, report), false);
+  f.conversation.release();
+  assert.equal(f.conversation.tryCallout(call, 1, report), false);
+  f.recognition.resolve({ transcript: 'Hold Heaven', endedAt: 150 });
+  await tick();
+  assert.equal(f.conversation.state, 'speaking');
+  assert.equal(f.conversation.tryCallout(call, 1, report), false);
+  done.resolve(); await tick();
+  assert.deepEqual(f.requests, ['Hold Heaven']);
+  assert.equal(f.conversation.records.length, 2);
+  assert.equal(f.conversation.records[1]!.status, 'completed');
+});
+
+test('round restart and loss before first audio cancel the turn and ignore late starts', async () => {
+  for (const reason of ['Round restarted', 'Sighting changed before playback', 'Tab hidden']) {
+    const { r, call, report } = visibleCall();
+    const done = deferred<void>();
+    let lateStart!: () => void;
+    let parent!: AbortSignal;
+    const f = setup({ async speak(_text, signal, start) {
+      parent = signal; lateStart = () => start('browser'); await done.promise;
+    } });
+    f.conversation.tryCallout(call, 1, report);
+    await tick();
+    f.conversation.cancel(reason);
+    assert.ok(parent.aborted);
+    const archived = r.callouts.events();
+    assert.equal(archived.at(-1)!.calloutStage, 'canceled');
+    assert.ok(!archived.some(e => e.kind === 'said'));
+    r.reset();
+    lateStart(); done.resolve(); await tick();
+    assert.equal(f.conversation.records[0]!.audio, null);
+    assert.deepEqual(r.callouts.events(), []);
+  }
+});
+
+test('successful and failed callouts retain subtitles and truthful lifecycle status', async () => {
+  for (const result of ['started', 'failed', 'no start']) {
+    const { r, call, report } = visibleCall();
+    const f = setup({ async speak(_text, _signal, start) {
+      if (result === 'started') start('hosted-stream');
+      if (result === 'failed') throw new Error('No browser voice');
+    } });
+    f.conversation.tryCallout(call, 1, report);
+    await tick();
+    assert.equal(f.conversation.response?.reply, call.text);
+    assert.equal(f.conversation.state, 'idle');
+    assert.equal(f.conversation.records[0]!.status, result === 'started' ? 'completed' : 'failed');
+    assert.equal(r.callouts.events().filter(e => e.kind === 'said').length, Number(result === 'started'));
+    assert.equal(r.callouts.events().at(-1)!.calloutStage, result === 'started' ? 'completed' : 'failed');
+  }
+});
+
+test('replacing a held microphone with text never exposes an idle slot to a settling Learn tick', async () => {
+  const { call, report } = visibleCall();
+  let replacing = false;
+  const f = setup({ update() {
+    if (replacing && f.conversation.state === 'idle') f.conversation.tryCallout(call, 1, report);
+  } });
+  f.conversation.beginListening();
+  replacing = true;
+  f.conversation.submitText('Smoke Heaven');
+  replacing = false;
+  await tick();
+  assert.deepEqual(f.conversation.records.map(r => r.input), ['voice', 'text']);
+  assert.deepEqual(f.spoken, [reply.response.reply]);
+});

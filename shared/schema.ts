@@ -54,8 +54,16 @@ export const TurnLogSchema = z.strictObject({
 });
 export type TurnLog = z.infer<typeof TurnLogSchema>;
 
+export const SightingSchema = z.strictObject({
+  id: z.string(), tick: z.number().int(), region: RegionIdSchema,
+  defenderIds: z.array(z.string()).min(1), count: z.number().int().positive(),
+});
+export type Sighting = z.infer<typeof SightingSchema>;
+
 export const BrimEventSchema = z.strictObject({
   t: z.number(), kind: z.enum(['saw', 'decided', 'said', 'did']), detail: z.string(),
+  sightingId: z.string().optional(), sighting: SightingSchema.optional(),
+  calloutStage: z.enum(['generated', 'scheduled', 'started', 'completed', 'canceled', 'failed', 'skipped']).optional(),
 });
 export type BrimEvent = z.infer<typeof BrimEventSchema>;
 

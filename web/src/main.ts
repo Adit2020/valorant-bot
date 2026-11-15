@@ -76,7 +76,7 @@ function render() {
     const row = document.createElement('li');
     const detail = document.createElement('p');
     detail.className = 'log-detail';
-    detail.textContent = `#${conversation.records.indexOf(record)+1} · ${record.t.toFixed(1)}s · ${record.status} · ${record.source === 'local' ? 'local fallback' : record.source || record.input}${record.audio ? ` · ${record.audio}` : ''}${record.error ? ` · ${record.error}` : ''}${record.notices.length ? ` · ${record.notices.at(-1)}` : ''}`;
+    detail.textContent = `#${conversation.records.indexOf(record)+1} · ${record.t.toFixed(1)}s · ${record.status} · ${record.callout ? 'enemy sighting' : record.source === 'local' ? 'local fallback' : record.source || record.input}${record.audio ? ` · ${record.audio}` : ''}${record.error ? ` · ${record.error}` : ''}${record.notices.length ? ` · ${record.notices.at(-1)}` : ''}`;
     row.append(detail);
     for (const [speaker,message] of [['You',record.transcript || (record.input === 'voice' ? '(no final transcript)' : '')], ['Brim',record.response?.reply]]) {
       if (!message) continue;
@@ -93,7 +93,7 @@ const mapPanel = mountMapPanel(element('.map-panel'), {
   isTalking: () => conversation.isHolding,
   isBrimSpeaking: () => conversation.state === 'speaking',
   announce: (text, chip) => conversation.announce(line(text, 'round'), chip),
-  resetVoice: () => conversation.cancel(),
+  voice: conversation,
   toggleMode: () => setMode(mode === 'learn' ? 'match' : 'learn'),
 });
 if (mapPanel.phase === 'buy') conversation.announce(line("What's the call?", 'round'));

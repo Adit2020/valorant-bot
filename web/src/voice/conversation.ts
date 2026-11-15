@@ -1,5 +1,7 @@
 import type { BrimResponse } from '../../../shared/schema.js';
 import { BrimRequestSchema } from '../../../shared/schema.js';
+import type { EnemyCallout, PlaybackStage } from '../comms/calloutGen.js';
+import { line } from '../comms/buyCall.js';
 import type { ReplyResult } from '../comms/brimClient.js';
 import { attachTurnLog, type ConversationRecord, type ConversationState } from '../trace/log.js';
 import type { Capture, SpeechResult } from './stt.js';
@@ -21,6 +23,9 @@ export class Conversation {
   response: BrimResponse | null = null;
   message = 'Hold Space to talk, or type a message.';
   records: ConversationRecord[] = [];
+  private automatic?: { call: EnemyCallout; report(stage: PlaybackStage, detail?: string): void };
+  get activeCallout() { return this.automatic?.call; }
+
   private generation = 0;
   private current?: ConversationRecord;
   private abort?: AbortController;
@@ -48,7 +53,19 @@ export class Conversation {
   }
 
   cancel(message = 'Interrupted. Ready for your next call.') {
+    this.interrupt(message);
+    this.changed();
+  }
+
+  // Replacement turns publish their new state atomically. Rendering an interim idle
+  // state could settle the Learn clock and let a sighting reserve the channel.
+  private interrupt(message: string) {
     ++this.generation;
+    if (this.automatic) {
+      this.automatic.report('canceled', message);
+      this.automatic = undefined;
+    }
+    if (this.records.at(-1)?.input === 'callout') this.response = null;
     this.abort?.abort();
     this.capture?.cancel();
     this.capture = undefined;
@@ -59,12 +76,11 @@ export class Conversation {
     this.current = undefined;
     this.state = 'idle';
     this.message = message;
-    this.changed();
   }
 
   beginListening() {
     if (this.state === 'listening' && this.releasedAt === undefined) return;
-    this.cancel(); // Stops speech synchronously, before requesting microphone access.
+    this.interrupt('Player pressed push-to-talk'); // Stop speech before requesting microphone access.
     this.deps.unlockAudio();
     const id = this.generation;
     const record = this.newRecord('voice');
@@ -108,14 +124,14 @@ export class Conversation {
       this.changed();
       return;
     }
-    this.cancel();
+    this.interrupt('Player submitted a text command');
     this.deps.unlockAudio();
     const record = this.newRecord('text');
     void this.send(this.generation, record, parsed.data.transcript, this.deps.now());
   }
 
   announce(result: ReplyResult, chip?: string) {
-    this.cancel();
+    this.interrupt('Round announcement');
     if (chip) this.deps.unlockAudio();
     const record = this.newRecord(chip ? 'chip' : 'round');
     record.transcript = chip ?? '';
@@ -123,6 +139,24 @@ export class Conversation {
     this.state = 'thinking';
     void this.deliver(this.generation, record, result, this.deps.now(), this.abort.signal)
       .catch(error => this.fail(record.id, record, error));
+  }
+
+  tryCallout(call: EnemyCallout, roundId: number, report: (stage: PlaybackStage, detail?: string) => void): boolean {
+    if (this.state !== 'idle') return false;
+    const id = ++this.generation;
+    const record = this.newRecord('callout');
+    record.callout = { roundId, sightingId: call.sighting.id };
+    this.automatic = { call, report };
+    this.abort = new AbortController();
+    const signal = this.abort.signal;
+    const scheduled = this.deps.now();
+    this.state = 'thinking';
+    // Reserve the channel synchronously. UI and network work run outside the fixed tick.
+    queueMicrotask(() => {
+      if (id === this.generation) void this.deliver(id, record, line(call.text, 'round'), scheduled, signal)
+        .catch(error => this.fail(id, record, error));
+    });
+    return true;
   }
 
   private async send(id: number, record: ConversationRecord, transcript: string, speechEnd: number) {
@@ -145,7 +179,7 @@ export class Conversation {
   }
 
   private async deliver(id: number, record: ConversationRecord, result: ReplyResult, speechEnd: number, signal: AbortSignal) {
-    const label = record.command ? (record.command.validator.ok ? 'Command accepted' : 'Command failed') : { local: 'Local fallback', openai: 'OpenAI', keyword: 'Play call', round: 'Round' }[result.source];
+    const label = record.callout ? 'Enemy sighting' : record.command ? (record.command.validator.ok ? 'Command accepted' : 'Command failed') : { local: 'Local fallback', openai: 'OpenAI', keyword: 'Play call', round: 'Round' }[result.source];
     record.response = this.response = result.response;
     record.source = result.source;
     this.message = `${label} reply. Preparing speech…`;
@@ -154,7 +188,8 @@ export class Conversation {
       if (id !== this.generation) return;
       if (record.latencyMs.firstAudio === null) {
         record.latencyMs.firstAudio = this.deps.now() - speechEnd;
-        this.deps.said?.(record);
+        if (this.automatic) this.automatic.report('started');
+        else this.deps.said?.(record);
       }
       record.audio = mode;
       this.state = 'speaking';
@@ -167,6 +202,11 @@ export class Conversation {
       this.changed();
     });
     if (id !== this.generation) return;
+    if (this.automatic) {
+      if (record.latencyMs.firstAudio === null) throw new Error('Playback ended without a speech-start signal.');
+      this.automatic.report('completed');
+      this.automatic = undefined;
+    }
     record.status = 'completed';
     attachTurnLog(record);
     this.state = 'idle';
@@ -184,6 +224,8 @@ export class Conversation {
     this.capture = undefined;
     this.current = undefined;
     this.state = 'idle';
+    this.automatic?.report('failed', record.error);
+    this.automatic = undefined;
     this.message = record.error;
     this.changed();
   }

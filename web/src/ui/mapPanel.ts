@@ -8,6 +8,7 @@ import { Round, ROUND_TICKS, type RoundEvent } from '../sim/round.js';
 import { DT, FixedClock, timeScale, type Mode } from '../sim/loop.js';
 import { defaultPlay, plays } from '../plays/index.js';
 import { isTypingTarget } from '../voice/controls.js';
+import type { Conversation } from '../voice/conversation.js';
 
 export type { Mode } from '../sim/loop.js';
 
@@ -19,7 +20,7 @@ export interface MapPanelHooks {
   /** Called for the L shortcut, so the voice stage's Learn/Match buttons stay the single control. */
   toggleMode(): void;
   announce(text: string, chip?: string): void;
-  resetVoice(): void;
+  voice: Pick<Conversation, 'state' | 'activeCallout' | 'tryCallout' | 'cancel'>;
 }
 
 export interface MapPanel {
@@ -60,14 +61,15 @@ export function mountMapPanel(root: HTMLElement, hooks: MapPanelHooks): MapPanel
   const param = query.get('seed');
   const lab = import.meta.env.DEV && query.get('agentLab');
   const practice = lab === 'practice';
-  const round = new Round(param && /^\d{1,10}$/.test(param) ? Number(param) : 2026, { practice, liveDrill: lab === 'live' });
+  const calloutDrill = lab === 'sighting' || lab === 'multiple' || lab === 'cover' ? lab : undefined;
+  const round = new Round(param && /^\d{1,10}$/.test(param) ? Number(param) : 2026, { practice, liveDrill: lab === 'live', calloutDrill });
   const status = $('#command-status');
   let command: CommandTrace | undefined;
   let roundId = 1;
   const archive: RoundTrace[] = [];
   const dialogue: BrimEvent[] = [];
   const roundTrace = (end: RoundTrace['end']): RoundTrace => ({
-    roundId, seed: round.seed, end, events: [...round.brim.events(), ...dialogue].sort((a,b) => a.t - b.t),
+    roundId, seed: round.seed, end, events: [...round.brim.events(), ...round.callouts.events(), ...dialogue].sort((a,b) => a.t - b.t),
   });
   const tag = $('.hud-tag');
   const choices = $('#buy-plays');
@@ -125,8 +127,13 @@ export function mountMapPanel(root: HTMLElement, hooks: MapPanelHooks): MapPanel
     playButton.setAttribute('aria-pressed', String(!playing));
   }
   function restart() {
+    // Canceling a held microphone renders the new voice state and settles the Learn clock.
+    // Freeze the departing round before that callback can advance or schedule another turn.
+    playing = false;
     effects.length = 0;
     map.clearEffects();
+    round.callouts.discardPending('Round restarted');
+    hooks.voice.cancel('Round restarted');
     archive.push(roundTrace('restart'));
     roundId++;
     command = undefined;
@@ -137,7 +144,6 @@ export function mountMapPanel(root: HTMLElement, hooks: MapPanelHooks): MapPanel
     setPlaying(true);
     showPhase();
     if (round.phase === 'buy') hooks.announce("What's the call?");
-    else hooks.resetVoice();
   }
   // Console controls on the live panel only when explicitly requested in dev.
   // Never expose the roster, clock, or mutable world through this interface.
@@ -147,7 +153,8 @@ export function mountMapPanel(root: HTMLElement, hooks: MapPanelHooks): MapPanel
       cancelGoal: (id: number) => round.brim.cancelGoal(id),
       clearGoals: () => round.brim.clearGoals(),
       reset: restart,
-      events: () => round.brim.events(),
+      events: () => roundTrace('current').events,
+      observations: () => round.observations('brim').map(({ id, x, y }) => ({ id, x, y })),
       inspect: () => ({ ...round.brim.inspect(), tick: round.tick, smokes: round.smokesLeft,
         molly: round.mollyLeft, spike: round.snapshot().spike,
         heavenBlocked: !hasLOS(DEFENDER_SPOTS.heaven.pos, PLANT_SPOTS.default, round.activeSmokes()),
@@ -203,6 +210,18 @@ export function mountMapPanel(root: HTMLElement, hooks: MapPanelHooks): MapPanel
     : new IntersectionObserver(entries => { visible = entries.some(entry => entry.isIntersecting); });
   observer?.observe(canvas);
 
+  function serviceCallouts() {
+    const calls = round.callouts;
+    const voice = hooks.voice;
+    const active = voice.activeCallout;
+    if (active && (!round.canCallout || (voice.state === 'thinking' && !calls.isCurrent(active.sighting)))) {
+      voice.cancel(round.canCallout ? 'Sighting changed before playback' : 'Brim died or the round ended');
+    }
+    if (!round.canCallout || voice.state !== 'idle') return;
+    const call = calls.take();
+    if (call) voice.tryCallout(call, roundId, (stage, detail) => calls.playback(call, stage, detail));
+  }
+
   function advance(now: number) {
     const elapsed = now - lastFrame;
     lastFrame = now;
@@ -219,6 +238,7 @@ export function mountMapPanel(root: HTMLElement, hooks: MapPanelHooks): MapPanel
         effects.push(event);
         if (event.public || designer.checked) map.spawnEffect(event.effect, event.tick * DT);
       }
+      serviceCallouts();
     });
     if (round.finished) setPlaying(false);
   }
@@ -230,7 +250,13 @@ export function mountMapPanel(root: HTMLElement, hooks: MapPanelHooks): MapPanel
     if (round.phase === 'live') advance(performance.now());
     scale = next;
   }
-  document.addEventListener('visibilitychange', () => { lastFrame = performance.now(); }, on);
+  document.addEventListener('visibilitychange', () => {
+    lastFrame = performance.now();
+    if (document.hidden) {
+      round.callouts.discardPending('Tab hidden');
+      if (hooks.voice.activeCallout) hooks.voice.cancel('Tab hidden');
+    }
+  }, on);
 
   function commandStatus() {
     if (round.brim.recovering) return 'Falling back to plan';

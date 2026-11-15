@@ -21,3 +21,10 @@ test('browser fallback failure propagates; hosted success avoids fallback', asyn
   await assert.rejects(withSpeechFallback(async () => { throw new Error('hosted failure'); }, async () => { throw new Error('browser failure'); }, new AbortController().signal, () => {}), /browser failure/);
   await withSpeechFallback(async () => {}, async () => { throw new Error('must not fallback'); }, new AbortController().signal, () => {});
 });
+
+test('failed hosted stream after playing never repeats the line in browser synthesis', async () => {
+  let fallbacks = 0;
+  await assert.rejects(withSpeechFallback(async () => { throw new Error('stream stopped'); },
+    async () => { fallbacks++; }, new AbortController().signal, () => {}, () => true), /stream stopped/);
+  assert.equal(fallbacks, 0);
+});

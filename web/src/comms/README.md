@@ -10,4 +10,12 @@ validateActions checks the entire batch, including queued utility, matching play
 
 “Your call” watches a currently observed contact, continues the highest-priority pending goal by ID, or holds and saves utility. Continuing an existing order does not enqueue a duplicate. The round trace records the reason.
 
-For Step 7, round.observations('brim') returns detached, currently seen opponents. regionAt(x, y) resolves callouts. round.brim.inspect().knownEnemies provides historical lastSeenTick and visible flags. round.brim.events() returns timestamped saw, decided and did events. Conversation.announce(result) uses the existing interrupting speech path. Check conversation.state before unsolicited speech to avoid interrupting a player. Playback start adds the actual said event to mapPanel.trace().
+## Automatic enemy callouts
+
+After movement, damage and deaths on each live tick, Round feeds only `round.observations('brim')` to its round-local `round.callouts` generator. `regionAt(x, y)` assigns each contact a map name. A changed set of visible IDs creates a sighting. An unmapped point or an empty set produces no location claim. The map has point-to-point visibility, with no area inspection or coverage record, so clearance calls are deferred.
+
+The generator retains at most one pending line per region. Loss of contact removes the line. A changed count or membership replaces it. Eligible lines go oldest first, with simultaneous sightings ordered by count (descending), then region. Scheduling and actual playback start each establish a 60-tick cooldown for that region. An unchanged group stays silent, including when an extra contact briefly appears and disappears before anyone hears about it. Continuous confirmation keeps a pending line current.
+
+The map panel reserves one idle conversation slot with `Conversation.tryCallout(call, roundId, report)`. Listening, transcript finalization, command processing and acknowledgments all own the channel until they finish. Push-to-talk and typed commands interrupt automatic speech immediately. The generator produces only enemy reports during combat. A contact change during TTS preparation aborts the obsolete line. A line that already started can finish, subject to player interruption, death, round end, restart or a hidden tab. Mode changes preserve the current round and its simulation-time cooldowns.
+
+Use `round.callouts.events(): BrimEvent[]` for detached sighting and speech evidence, `round.brim.events(): BrimEvent[]` for controller actions, and `mapPanel.trace(): RoundTrace[]` for the joined round history. The judge's join keys and callback semantics are in the [trace format](../trace/README.md).

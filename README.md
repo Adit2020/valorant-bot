@@ -191,3 +191,17 @@ Open the main page with `?seed=2026`; **R** replays that same seed. Omen's hold 
 ## Step 6 · Mid-round commands
 
 Select a buy-phase play, then speak or type “Smoke Heaven and U-Hall, then move Triple.” The HUD tracks the command while the existing simulation deploys utility and moves Brim. “Smoke over there” asks for a target. “Your call” delegates to Brim’s deterministic current-objective policy. See the [live command pipeline and perception handoff](web/src/comms/README.md) and [round trace format](web/src/trace/README.md). Keyword calls work without hosted credentials.
+
+## Step 7a · Automatic enemy callouts
+
+During a live round Brim reports changes in his own visible contacts without a player prompt. The existing subtitles, conversation history and Download trace control include his automatic lines. See the [communication policy](web/src/comms/README.md) and [trace join](web/src/trace/README.md).
+
+Run `npm run dev` and use these seed-2026 agent lab fixtures. Restart repeats the same initial conditions. The lab delays the first shot for eight simulation seconds so there is time to inspect the voice turn. Playback may require a user gesture in a fresh browser tab. Click Restart to replay after interacting.
+
+| Development demo | What to verify |
+| --- | --- |
+| [Sighting](http://127.0.0.1:5184/?agentLab=sighting&seed=2026) | Brim turns toward Jett. “One Heaven.” appears in subtitles and history. Download trace and join the callout to the tick-one observation. Hold Space during the line to interrupt, then say “Smoke Heaven.” |
+| [Cover](http://127.0.0.1:5184/?agentLab=cover&seed=2026) | Jett stands across the solid Triple box. Toggle Designer view to reveal her. Brim's observations stay empty and he makes no clearance claim. |
+| [Multiple contacts](http://127.0.0.1:5184/?agentLab=multiple&seed=2026) | Brim sees Jett and KJ in Heaven and Chamber in Back Site. “Two Heaven.” and “One Back Site.” share the voice channel in sequence. |
+
+In the development console, `brim.observations()` returns Brim's current contacts and `brim.events()` returns this round's combined trace. In normal seeded play, buy-phase selection and mid-round commands use the same voice controls.

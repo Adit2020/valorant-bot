@@ -23,11 +23,12 @@ function waitFor(target: EventTarget, event: string, signal: AbortSignal, action
 
 export async function withSpeechFallback(
   hosted: () => Promise<void>, browser: () => Promise<void>, signal: AbortSignal,
-  notice: (message: string) => void,
+  notice: (message: string) => void, alreadyStarted: () => boolean = () => false,
 ): Promise<void> {
   try { await hosted(); }
   catch (error) {
     if (signal.aborted) throw signal.reason;
+    if (alreadyStarted()) throw error; // Replaying a partially spoken line would duplicate it.
     notice(`Hosted TTS unavailable; using browser voice. ${error instanceof Error ? error.message : ''}`.trim());
     await browser();
   }
@@ -92,14 +93,16 @@ export class SpeechOutput {
     if (signal.aborted) throw signal.reason;
     const owner = this.abort;
     this.text = text; this.boundaryWord = -1; this.boundaryAt = -Infinity;
+    let playbackStarted = false;
     const visualStarted = (mode: AudioMode) => {
       if (signal.aborted) return;
+      playbackStarted = true;
       this.visualMode = mode; this.startedAt = performance.now(); started(mode);
     };
     try {
       await withSpeechFallback(
         () => this.hosted(text, signal, visualStarted, notice),
-        () => this.browser(text, signal, visualStarted), signal, notice,
+        () => this.browser(text, signal, visualStarted), signal, notice, () => playbackStarted,
       );
     } finally { if (this.abort === owner) this.visualMode = null; }
   }
